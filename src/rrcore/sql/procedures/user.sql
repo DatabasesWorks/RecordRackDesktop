@@ -1,7 +1,7 @@
 USE ###DATABASENAME###;
 
-DELIMITER //
-CREATE PROCEDURE CreateUser(
+###BEGIN###;
+CREATE PROCEDURE CreateUser (
     IN iUserName VARCHAR(100),
     IN iPassword VARCHAR(100)
     )
@@ -17,5 +17,5 @@ BEGIN
     EXECUTE `stmt`;
     DEALLOCATE PREPARE `stmt`;
     FLUSH PRIVILEGES;
-END //
-DELIMITER ;
+END;
+###END###;

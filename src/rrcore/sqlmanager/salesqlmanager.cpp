@@ -615,7 +615,7 @@ void SaleSqlManager::undoAddSaleTransaction(const QueryRequest &request, QueryRe
                               }
                           });
 
-            callProcedure("ArchiveDebtTransaction", {
+            callProcedure("ArchiveDebtTransactionByTransactionId", {
                               ProcedureArgument {
                                   ProcedureArgument::Type::In,
                                   "transaction_table",

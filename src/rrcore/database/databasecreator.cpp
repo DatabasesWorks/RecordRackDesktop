@@ -21,8 +21,10 @@ const QString CONNECTION_NAME("databasecreator");
 const QString INIT_SQL_FILE(":/sql/init.sql");
 const QString PROCEDURE_DIR(":/sql/procedures");
 
-const QString CREATE_PROCEDURE_PATTERN("(?<=DELIMITER \\/\\/).*(?=\\/\\/ DELIMITER ;)");
+//const QString CREATE_PROCEDURE_PATTERN("(?<=DELIMITER \\/\\/).*(?=\\/\\/ DELIMITER ;)");
+const QString CREATE_PROCEDURE_PATTERN("(?<=###BEGIN###;).*(?=###END###;)");
 const QString DATABASE_NAME_PATTERN("###DATABASENAME###");
+const QString NO_COMMENT_OR_SPACE_PATTERN("(\\/\\*(.|\\n)*?\\*\\/|^--.*\\n|\\t|\\n)");
 
 DatabaseCreator::DatabaseCreator(QSqlDatabase connection) :
     m_connection(connection)
@@ -76,7 +78,7 @@ void DatabaseCreator::executeSqlFile(const QString &fileName)
 
     if(m_connection.driver()->hasFeature(QSqlDriver::Transactions)) {
         // Replace comments and tabs and new lines with space
-        sqlData = sqlData.replace(QRegularExpression("(\\/\\*(.|\\n)*?\\*\\/|^--.*\\n|\\t|\\n)",
+        sqlData = sqlData.replace(QRegularExpression(NO_COMMENT_OR_SPACE_PATTERN,
                                                      QRegularExpression::CaseInsensitiveOption | QRegularExpression::MultilineOption), " ");
         // Remove waste spaces
         sqlData = sqlData.trimmed();
@@ -206,7 +208,7 @@ void DatabaseCreator::executeStoredProcedures(const QString &fileName)
     sqlData = sqlData.replace(QRegularExpression(DATABASE_NAME_PATTERN), Config::instance().databaseName());
 
     // Replace comments and tabs and new lines with space
-    sqlData = sqlData.replace(QRegularExpression("(\\/\\*(.|\\n)*?\\*\\/|^--.*\\n|\\t|\\n)",
+    sqlData = sqlData.replace(QRegularExpression(NO_COMMENT_OR_SPACE_PATTERN,
                                                  QRegularExpression::CaseInsensitiveOption | QRegularExpression::MultilineOption), " ");
     // Remove waste spaces
     sqlData = sqlData.trimmed();

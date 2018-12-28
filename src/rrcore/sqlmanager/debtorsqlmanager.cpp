@@ -786,7 +786,7 @@ void DebtorSqlManager::removeDebtor(const QueryRequest &request, QueryResult &re
                       });
 
         // Archive debt transactions.
-        callProcedure("ArchiveDebtTransaction", {
+        callProcedure("ArchiveAllDebtTransactions", {
                           ProcedureArgument {
                               ProcedureArgument::Type::In,
                               "debtor_id",

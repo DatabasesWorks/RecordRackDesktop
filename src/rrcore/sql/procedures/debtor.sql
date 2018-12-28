@@ -1,6 +1,6 @@
 USE ###DATABASENAME###;
 
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddDebtor (
 	IN iClientId INTEGER,
     IN iNoteId INTEGER,
@@ -10,12 +10,10 @@ BEGIN
 	INSERT INTO debtor (client_id, note_id, archived, created, last_edited, user_id)
 		VALUES (iClientId, iNoteId, FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), iUserId);
 	SELECT LAST_INSERT_ID() AS id;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddDebtPayment (
 	IN iDebtTransactionId INTEGER,
     IN iTotalAmount DECIMAL(19,2),
@@ -31,12 +29,10 @@ BEGIN
 		archived, created, last_edited, user_id) VALUES (iDebtTransactionId, iTotalAmount, iAmountPaid, iBalance, 
 		iCurrency, iDueDate, iNoteId, FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), iUserId);
 	SELECT LAST_INSERT_ID() AS id;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddDebtTransaction (
 	IN iDebtorId INTEGER,
     IN iTransactionTable VARCHAR(20),
@@ -49,13 +45,11 @@ BEGIN
 		VALUES (iDebtorId, iTransactionTable, iTransactionId, iNoteId, FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), iUserId);
 
 	SELECT LAST_INSERT_ID() AS id;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
-CREATE PROCEDURE ArchiveDebtTransaction (
+###BEGIN###;
+CREATE PROCEDURE ArchiveDebtTransactionByTransactionId (
 	IN iTransactionTable VARCHAR(40),
     IN iTransactionId INTEGER,
 	IN iUserId INTEGER
@@ -63,12 +57,10 @@ CREATE PROCEDURE ArchiveDebtTransaction (
 BEGIN
 	UPDATE debt_transaction SET archived = 1, last_edited = CURRENT_TIMESTAMP(), user_id = iUserId
 		WHERE transaction_table = iTransactionTable AND transaction_id = iTransactionId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE TouchDebtTransaction (
 	IN iDebtTransactionId INTEGER,
     IN iUserId INTEGER
@@ -76,12 +68,10 @@ CREATE PROCEDURE TouchDebtTransaction (
 BEGIN
 	UPDATE debt_transaction SET last_edited = CURRENT_TIMESTAMP(), user_id = iUserId
 		WHERE id = iDebtTransactionId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE UpdateDebtPayment (
 	IN iDebtPaymentId INTEGER,
     IN iTotalAmount DECIMAL(19,2),
@@ -95,12 +85,10 @@ BEGIN
 	UPDATE debt_payment SET total_amount = iTotalAmount, amount_paid = iAmountPaid,
 		balance = iBalance, due_date = iDueDate, last_edited = CURRENT_TIMESTAMP(), user_id = iUserId
         WHERE id = iDebtPaymentId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE ArchiveDebtTransaction (
 	IN iDebtTransactionId INTEGER,
     IN iUserId INTEGER
@@ -108,12 +96,10 @@ CREATE PROCEDURE ArchiveDebtTransaction (
 BEGIN
 	UPDATE debt_transaction SET archived = 1, last_edited = CURRENT_TIMESTAMP(), user_id = iUserId
 		WHERE id = iDebtTransactionId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###
 CREATE PROCEDURE ArchiveDebtPayment (
 	IN iDebtPaymentId INTEGER,
     IN iUserId INTEGER
@@ -121,12 +107,10 @@ CREATE PROCEDURE ArchiveDebtPayment (
 BEGIN
 	UPDATE debt_payment SET archived = 1, last_edited = CURRENT_TIMESTAMP(), user_id = iUserId
 		WHERE id = iDebtPaymentId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE FilterDebtorsByName (
 	IN iFilterText VARCHAR(100),
     IN iArchived BOOLEAN
@@ -142,12 +126,10 @@ BEGIN
         debt_payment.last_edited
         HAVING MAX(debt_payment.last_edited) = debt_payment.last_edited
         AND archived = IFNULL(iArchived, NULL);
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###
 CREATE PROCEDURE ArchiveDebtor (
 	IN iDebtorId INTEGER,
     IN iUserId INTEGER
@@ -155,36 +137,30 @@ CREATE PROCEDURE ArchiveDebtor (
 BEGIN
 	UPDATE debtor SET archived = 1, last_edited = CURRENT_TIMESTAMP(),
 		user_id = iUserId WHERE id = iDebtorId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
-CREATE PROCEDURE ArchiveDebtTransaction (
+###BEGIN###;
+CREATE PROCEDURE ArchiveAllDebtTransactions (
 	IN iDebtorId INTEGER,
     IN iUserId INTEGER
 )
 BEGIN
 	UPDATE debt_transaction SET archived = 1, last_edited = CURRENT_TIMESTAMP(),
 		user_id = iUserId WHERE id = iDebtorId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE GetDebtTransaction (
 	IN iDebtorId INTEGER
 )
 BEGIN
 	SELECT id FROM debt_transaction WHERE debtor_id = iDebtorId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE UndoArchiveDebtor (
 	IN iDebtorId INTEGER,
     IN iUserId INTEGER
@@ -192,12 +168,10 @@ CREATE PROCEDURE UndoArchiveDebtor (
 BEGIN
 	UPDATE debtor SET archived = 0, last_edited = CURRENT_TIMESTAMP(),
 		user_id = iUserId WHERE id = iDebtorId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE UndoArchiveDebtTransaction (
 	IN iDebtTransactionId INTEGER,
     IN iUserId INTEGER
@@ -205,12 +179,10 @@ CREATE PROCEDURE UndoArchiveDebtTransaction (
 BEGIN
 	UPDATE debt_transaction SET archived = 0, last_edited = CURRENT_TIMESTAMP(),
 		user_id = iUserId WHERE id = iDebtTransactionId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE ViewTotalBalanceForDebtor (
 	IN iDebtorId INTEGER
 )
@@ -229,12 +201,10 @@ BEGIN
 		LEFT JOIN user ON user.id = debtor.user_id
 		LEFT JOIN note ON debtor.note_id = note.id
 		WHERE debtor.archived = 0 AND debtor.id = iDebtorId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE ViewDebtorDetails (
 	IN iDebtorId INTEGER,
     IN iArchived BOOLEAN
@@ -246,12 +216,10 @@ BEGIN
         FROM debtor
         INNER JOIN client ON client.id = debtor.client_id
         WHERE debtor.id = iDebtorId AND debtor.archived = iArchived;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE ViewFewDebtorDetails (
 	IN iDebtorId INTEGER,
     IN iArchived BOOLEAN
@@ -262,12 +230,10 @@ BEGIN
 		INNER JOIN debtor ON debtor.client_id = client.id
 		LEFT JOIN note ON note.id = debtor.note_id
 		WHERE debtor.id = iDebtorId AND debtor.archived = iArchived;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE ViewDebtTransactions (
 	IN iDebtorId INTEGER,
     IN iArchived BOOLEAN
@@ -286,5 +252,5 @@ BEGIN
 		LEFT JOIN note ON note.id = debt_transaction.note_id
 		WHERE debtor.id = iDebtorId AND debt_transaction.archived = iArchived
 		ORDER BY debt_payment.last_edited ASC;
-END //
-DELIMITER ;
+END;
+###END###;

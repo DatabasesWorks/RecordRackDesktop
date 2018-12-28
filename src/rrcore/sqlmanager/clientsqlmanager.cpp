@@ -48,21 +48,6 @@ void ClientSqlManager::viewClients(const QueryRequest &request, QueryResult &res
                                                               ProcedureArgument::Type::In,
                                                               "archived",
                                                               params.value("archived", false)
-                                                          },
-                                                          ProcedureArgument {
-                                                              ProcedureArgument::Type::Out,
-                                                              "client_id",
-                                                              {}
-                                                          },
-                                                          ProcedureArgument {
-                                                              ProcedureArgument::Type::Out,
-                                                              "preferred_name",
-                                                              {}
-                                                          },
-                                                          ProcedureArgument {
-                                                              ProcedureArgument::Type::Out,
-                                                              "phone_number",
-                                                              {}
                                                           }
                                                       }));
 

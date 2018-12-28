@@ -1,7 +1,7 @@
 USE ###DATABASENAME###;
 
-DELIMITER //
-CREATE PROCEDURE ViewStockCategories(
+###BEGIN###;
+CREATE PROCEDURE ViewStockCategories (
     IN iSortOrder VARCHAR(4)
     )
 BEGIN
@@ -10,53 +10,11 @@ BEGIN
     ELSE
         SELECT id, category FROM category ORDER BY LOWER(category) ASC;
     END IF;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
-CREATE PROCEDURE ViewStockItems(
-    IN iFilterColumn VARCHAR(20),
-    IN iFilterText VARCHAR(100),
-    IN iSortColumn VARCHAR(20),
-    IN iSortOrder VARCHAR(15)
-    )
-BEGIN
-    SELECT item.id AS item_id, category.id AS category_id, category.category, item.item, item.description,
-        item.divisible, item.image, current_quantity.quantity,
-        unit.id as unit_id, unit.unit, unit.cost_price,
-        unit.retail_price, unit.currency, item.created, item.last_edited, item.user_id, item.user_id AS user
-        FROM item
-        INNER JOIN category ON item.category_id = category.id
-        INNER JOIN unit ON item.id = unit.item_id
-        INNER JOIN current_quantity ON item.id = current_quantity.item_id
-        LEFT JOIN user ON item.user_id = user.id
-        WHERE item.archived = 0 AND unit.base_unit_equivalent = 1
-        AND category.category LIKE (CASE
-                                    WHEN LOWER(iFilterColumn) = 'category'
-                                    THEN CONCAT('%', iFilterText, '%')
-                                    ELSE '%'
-                                    END)
-        AND item.item LIKE (CASE
-                            WHEN LOWER(iFilterColumn) = 'item'
-                            THEN CONCAT('%', iFilterText, '%')
-                            ELSE '%'
-                            END)
-        ORDER BY (CASE
-                    WHEN LOWER(iSortOrder) = 'descending' AND LOWER(iSortColumn) = 'category'
-                    THEN LOWER(category.category) END) DESC,
-                 (CASE
-                    WHEN (iSortOrder IS NULL AND iSortColumn IS NULL) OR (LOWER(iSortOrder) <> 'descending' AND LOWER(iSortColumn) = 'category')
-                    THEN LOWER(category.category) END) ASC,
-        LOWER(item.item) ASC;
-END //
-DELIMITER ;
-
---
-
-DELIMITER //
-CREATE PROCEDURE DeductStockQuantity(
+###BEGIN###;
+CREATE PROCEDURE DeductStockQuantity (
 	IN iItemId INTEGER,
 	IN iQuantity DOUBLE,
     IN iUnitId INTEGER,
@@ -80,13 +38,11 @@ BEGIN
 
     UPDATE current_quantity SET quantity = @availableQuantity - iQuantity, last_edited = CURRENT_TIMESTAMP(), user_id = iUserId
 		WHERE item_id = iItemId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
-CREATE PROCEDURE ViewStockItemDetails(
+###BEGIN###;
+CREATE PROCEDURE ViewStockItemDetails (
     INOUT ioItemId INTEGER,
     OUT oCategoryId INTEGER,
     OUT oCategory VARCHAR(100),
@@ -119,12 +75,10 @@ BEGIN
         LEFT JOIN user ON item.user_id = user.id
         WHERE item.archived = 0 AND unit.base_unit_equivalent = 1
         AND item.id = ioItemId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddStockCategory (
 	IN iCategory VARCHAR(100),
     IN iShortForm VARCHAR(10),
@@ -140,13 +94,11 @@ BEGIN
 	ELSE
 		SELECT id FROM category WHERE category = iCategory;
     END IF;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
-CREATE PROCEDURE AddStockItem(
+###BEGIN###;
+CREATE PROCEDURE AddStockItem (
 	IN iCategoryId INTEGER,
     IN iItem VARCHAR(200),
     IN iShortForm VARCHAR(10),
@@ -168,12 +120,10 @@ BEGIN
 	    ELSE
 		    SELECT id FROM item WHERE item = iItem;
         END IF;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddStockUnit (
 	IN iItemId INTEGER,
     IN iUnit INTEGER,
@@ -197,12 +147,10 @@ BEGIN
 	ELSE
 		SELECT id FROM unit WHERE unit = iUnit;
     END IF;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddInitialQuantity (
 	IN iItemId INTEGER,
     IN iQuantity DOUBLE,
@@ -213,12 +161,10 @@ CREATE PROCEDURE AddInitialQuantity (
 BEGIN
 	INSERT INTO initial_quantity (item_id, quantity, unit_id, reason, archived, created, last_edited, user_id)
 		VALUES (iItemId, iQuantity, iUnitId, iReason, FALSE, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), iUserId);
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddCurrentQuantity (
 	IN iItemId INTEGER,
     IN iQuantity DOUBLE,
@@ -228,23 +174,19 @@ CREATE PROCEDURE AddCurrentQuantity (
 BEGIN
 	INSERT INTO current_quantity (item_id, quantity, unit_id, created, last_edited, user_id)
 		VALUES (iItemId, iQuantity, iUnitId, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), iUserId);
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE GetStockCategoryId (
 	IN iItemId INTEGER
 )
 BEGIN
 	SELECT (SELECT category_id FROM item WHERE item.id = iItemId) AS category_id;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE UpdateStockItem (
 	IN iCategoryId INTEGER,
     IN iItemId INTEGER,
@@ -260,15 +202,13 @@ CREATE PROCEDURE UpdateStockItem (
 BEGIN
 	UPDATE item SET category_id = iCategoryId, item = iItem, short_form = iShortForm, description = iDescription,
 		barcode = iBarcode, divisible = iDivisible, image = iImage,
-        note_id = (CASE WHEN iNoteId IS NOT NULL THEN iNoteId ELSE note_id END), archived = FALSE,
+        note_id = IFNULL(iNoteId, note_id), archived = FALSE,
 		last_edited = CURRENT_TIMESTAMP(), user_id = iUserId
 		WHERE item.id = iItemId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE UpdateStockUnit (
 	IN iItemId INTEGER,
 	IN iUnit VARCHAR(100),
@@ -286,5 +226,61 @@ BEGIN
 		base_unit_equivalent = iBaseUnitEquivalent, cost_price = iCostPrice, retail_price = iRetailPrice,
         preferred = iPreferred, currency = iCurrency, note_id = iNoteId, archived = FALSE,
         last_edited = CURRENT_TIMESTAMP(), user_id = iUserId WHERE item_id = iItemId;
-END //
-DELIMITER ;
+END;
+###END###;
+
+###BEGIN###;
+CREATE PROCEDURE ViewStockItems (
+    IN iFilterColumn VARCHAR(20),
+    IN iFilterText VARCHAR(100),
+    IN iSortColumn VARCHAR(20),
+    IN iSortOrder VARCHAR(15)
+    )
+BEGIN
+    SELECT item.id AS item_id, category.id AS category_id, category.category, item.item, item.description,
+        item.divisible, item.image, current_quantity.quantity,
+        unit.id as unit_id, unit.unit, unit.cost_price,
+        unit.retail_price, unit.currency, item.created, item.last_edited, item.user_id, item.user_id AS user
+        FROM item
+        INNER JOIN category ON item.category_id = category.id
+        INNER JOIN unit ON item.id = unit.item_id
+        INNER JOIN current_quantity ON item.id = current_quantity.item_id
+        LEFT JOIN user ON item.user_id = user.id
+        WHERE item.archived = 0 AND unit.base_unit_equivalent = 1;
+        -- AND category.category LIKE (CASE WHEN LOWER(iFilterColumn) = 'category'
+        --                             THEN CONCAT('%', iFilterText, '%')
+        --                             ELSE '%'
+        --                             END)
+        -- AND item.item LIKE (CASE WHEN LOWER(iFilterColumn) = 'item'
+        --                     THEN CONCAT('%', iFilterText, '%')
+        --                     ELSE '%'
+        --                     END)
+        -- ORDER BY (CASE WHEN LOWER(iSortOrder) = 'descending' AND LOWER(iSortColumn) = 'category'
+        --             THEN LOWER(category.category) END) DESC,
+        --          (CASE WHEN (iSortOrder IS NULL AND iSortColumn IS NULL) OR (LOWER(iSortOrder) <> 'descending' AND LOWER(iSortColumn) = 'category')
+        --             THEN LOWER(category.category) END) ASC, LOWER(item.item) ASC;
+END;
+###END###;
+
+    -- SELECT item.id AS item_id, category.id AS category_id, category.category, item.item, item.description,
+    --     item.divisible, item.image, current_quantity.quantity,
+    --     unit.id as unit_id, unit.unit, unit.cost_price,
+    --     unit.retail_price, unit.currency, item.created, item.last_edited, item.user_id, item.user_id AS user
+    --     FROM item
+    --     INNER JOIN category ON item.category_id = category.id
+    --     INNER JOIN unit ON item.id = unit.item_id
+    --     INNER JOIN current_quantity ON item.id = current_quantity.item_id
+    --     LEFT JOIN user ON item.user_id = user.id
+    --     WHERE item.archived = 0 AND unit.base_unit_equivalent = 1;
+        -- AND category.category LIKE (CASE WHEN LOWER(iFilterColumn) = 'category'
+        --                             THEN CONCAT('%', iFilterText, '%')
+        --                             ELSE '%'
+        --                             END)
+        -- AND item.item LIKE (CASE WHEN LOWER(iFilterColumn) = 'item'
+        --                     THEN CONCAT('%', iFilterText, '%')
+        --                     ELSE '%'
+        --                     END)
+        -- ORDER BY (CASE WHEN LOWER(iSortOrder) = 'descending' AND LOWER(iSortColumn) = 'category'
+        --             THEN LOWER(category.category) END) DESC,
+        --          (CASE WHEN (iSortOrder IS NULL AND iSortColumn IS NULL) OR (LOWER(iSortOrder) <> 'descending' AND LOWER(iSortColumn) = 'category')
+        --             THEN LOWER(category.category) END) ASC, LOWER(item.item) ASC;

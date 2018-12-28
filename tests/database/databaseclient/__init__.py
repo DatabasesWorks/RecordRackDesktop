@@ -1,10 +1,11 @@
 #!venv/bin/python
 
 #from mysql.connector import MySQLConnection, Error
-from dbconfig import read_db_config
+from .dbconfig import read_db_config
 from subprocess import Popen, PIPE
 
 import pymysql
+import sqlparse
 import os
 import logging
 
@@ -17,19 +18,19 @@ __unixSocket = "/var/run/mysqld/mysqld.sock"
 
 def __update_sql_file_database_name(old_filename, new_filename, db_config):
     global __databaseNamePattern
-    f = open(old_filename, "r") 
-    sql = f.read().replace(__databaseNamePattern, db_config["database"])
-    g = open(new_filename, "w")
-    g.write(sql)
+    with open(old_filename, "r") as f:
+        sql = f.read().replace(__databaseNamePattern, db_config["database"])
+    with open(new_filename, "w") as g:
+        g.write(sql)
 
 def __execute_sql_file(filename, db_config):
-    command = """mysql -u %s -p"%s" --host %s --port %s %s < %s""" % (db_config["user"], db_config["password"],
-                db_config["host"], db_config["port"],
-                db_config["database"], filename)
-    os.system(command)
-# process = Popen(['mysql', db_config["database"], '-u', db_config["user"], '-p', db_config["password"]],
-#                 stdout=PIPE, stdin=PIPE)
-# process.communicate('source ' + filename)[0]
+    connect()
+    cursor = connection.cursor()
+    with open(filename, "r") as f:
+        for statement in sqlparse.split(f.read()):
+            if statement is not '':
+                #print("Statement", statement.replace(__databaseNamePattern, db_config["database"]), "DONE")
+                cursor.execute(statement.replace(__databaseNamePattern, db_config["database"]))
 
 def __create_tables(db_config):
     global __initSqlFile
@@ -81,7 +82,8 @@ def connect():
 
 def disconnect():
     global connection
-    connection.close()
+    if connection.open:
+        pass #connection.close()
     logging.info('Connection closed.')
  
  

@@ -1,34 +1,26 @@
 USE ###DATABASENAME###;
 
-DELIMITER //
-CREATE PROCEDURE ViewClients(
+###BEGIN###;
+CREATE PROCEDURE ViewClients (
     IN iFilterColumn VARCHAR(100),
     IN iFilterText VARCHAR(100),
-    IN iArchived TINYINT,
-    OUT oClientId INTEGER,
-    OUT oPreferredName VARCHAR(100),
-    OUT oPhoneNumber VARCHAR(100)
+    IN iArchived TINYINT
     )
 BEGIN
     IF LOWER(iFilterColumn) = 'preferred_name' THEN
-        SELECT id, preferred_name, phone_number
-        INTO oClientId, oPreferredName, oPhoneNumber FROM client
-        WHERE client.archived = iArchived AND client.preferred_name LIKE CONCAT('%', iFilterText, '%');
+        SELECT id, preferred_name, phone_number FROM client
+        WHERE client.archived = IFNULL(iArchived, FALSE) AND client.preferred_name LIKE CONCAT('%', IFNULL(iFilterText, ''), '%');
     ELSEIF LOWER(iFilterColumn) = 'phone_number' THEN
-        SELECT id, preferred_name, phone_number
-        INTO oClientId, oPreferredName, oPhoneNumber FROM client
-        WHERE client.archived = iArchived AND client.phone_number LIKE CONCAT('%', iFilterText, '%');
+        SELECT id, preferred_name, phone_number FROM client
+        WHERE client.archived = IFNULL(iArchived, FALSE) AND client.phone_number LIKE CONCAT('%', IFNULL(iFilterText, ''), '%');
     ELSE
-        SELECT id, preferred_name, phone_number
-        INTO oClientId, oPreferredName, oPhoneNumber FROM client
-        WHERE client.archived = iArchived;
+        SELECT id, preferred_name, phone_number FROM client
+        WHERE client.archived = IFNULL(iArchived, FALSE);
    END IF;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddClient (
 	IN iFirstName VARCHAR(100),
     IN iLastName VARCHAR(100),
@@ -47,12 +39,10 @@ BEGIN
 	ELSE
 		SELECT id FROM client WHERE phone_number = iPhoneNumber;
 	END IF;
-END //
-DELIMTER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE AddClientQuick (
     IN iPreferredName VARCHAR(100),
     IN iPhoneNumber VARCHAR(20),
@@ -66,24 +56,20 @@ BEGIN
         ) LIMIT 1;
 
     SELECT id FROM client WHERE phone_number = iPhoneNumber;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE ArchiveClient (
 	IN iClientId INTEGER,
     IN iUserId INTEGER
 )
 BEGIN
 	UPDATE client SET archived = 1, last_edited = CURRENT_TIMESTAMP(), user_id = iUserId WHERE id = iClientId;
-END //
-DELIMITER ;
+END;
+###END###;
 
---
-
-DELIMITER //
+###BEGIN###;
 CREATE PROCEDURE UpdateClient (
 	IN iClientId INTEGER,
 	IN iFirstName VARCHAR(100),
@@ -97,5 +83,5 @@ BEGIN
 		preferred_name = iPreferredName, phone_number = iPhoneNumber,
         last_edited = CURRENT_TIMESTAMP(), user_id = iUserId
 		WHERE id = iClientId;
-END //
-DELIMITER ;
+END;
+###END###;
