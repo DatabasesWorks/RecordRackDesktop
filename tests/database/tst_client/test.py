@@ -16,7 +16,7 @@ class ClientTest(unittest.TestCase):
     def tearDown(self):
         databaseclient.disconnect()
 
-    def test_ViewClients(self):
+    def test_ViewClientsNoFilter(self):
         clientId = 1
         preferredName = "Preferred"
         phoneNumber = "123456789"
@@ -26,6 +26,66 @@ class ClientTest(unittest.TestCase):
                         [clientId, preferredName, phoneNumber])
         databaseclient.connection.commit()
         cursor.callproc("ViewClients", [None, None, None])
+        for result in cursor:
+            self.assertEqual(result["id"], clientId)
+            self.assertEqual(result["preferred_name"], preferredName)
+            self.assertEqual(result["phone_number"], phoneNumber)
+
+    def test_ViewClientsWithPreferredNameFilter(self):
+        clientId = 1
+        preferredName = "Preferred"
+        phoneNumber = "123456789"
+        cursor = databaseclient.connection.cursor(pymysql.cursors.DictCursor)
+        cursor.execute("""INSERT INTO client (id, first_name, last_name, preferred_name, phone_number, address, note_id, archived, created, last_edited, user_id)
+                        VALUES (%s, 'First', 'Last', %s, %s, 'Address', NULL, 0, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), 1)""",
+                        [clientId, preferredName, phoneNumber])
+        databaseclient.connection.commit()
+        cursor.callproc("ViewClients", ['preferred_name', 'Pr', None])
+        for result in cursor:
+            self.assertEqual(result["id"], clientId)
+            self.assertEqual(result["preferred_name"], preferredName)
+            self.assertEqual(result["phone_number"], phoneNumber)
+
+    def test_ViewClientsWithUnavailablePreferredNameFilter(self):
+        clientId = 1
+        preferredName = "Preferred"
+        phoneNumber = "123456789"
+        cursor = databaseclient.connection.cursor(pymysql.cursors.DictCursor)
+        cursor.execute("""INSERT INTO client (id, first_name, last_name, preferred_name, phone_number, address, note_id, archived, created, last_edited, user_id)
+                        VALUES (%s, 'First', 'Last', %s, %s, 'Address', NULL, 0, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), 1)""",
+                        [clientId, preferredName, phoneNumber])
+        databaseclient.connection.commit()
+        cursor.callproc("ViewClients", ['preferred_name', 'ZZ', None])
+        for result in cursor:
+            self.assertEqual(result["id"], clientId)
+            self.assertEqual(result["preferred_name"], preferredName)
+            self.assertEqual(result["phone_number"], phoneNumber)
+
+    def test_ViewClientsWithPhoneNumberFilter(self):
+        clientId = 1
+        preferredName = "Preferred"
+        phoneNumber = "123456789"
+        cursor = databaseclient.connection.cursor(pymysql.cursors.DictCursor)
+        cursor.execute("""INSERT INTO client (id, first_name, last_name, preferred_name, phone_number, address, note_id, archived, created, last_edited, user_id)
+                        VALUES (%s, 'First', 'Last', %s, %s, 'Address', NULL, 0, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), 1)""",
+                        [clientId, preferredName, phoneNumber])
+        databaseclient.connection.commit()
+        cursor.callproc("ViewClients", ['phone_number', '12', None])
+        for result in cursor:
+            self.assertEqual(result["id"], clientId)
+            self.assertEqual(result["preferred_name"], preferredName)
+            self.assertEqual(result["phone_number"], phoneNumber)
+
+    def test_ViewClientsWithUnavailablePhoneNumberFilter(self):
+        clientId = 1
+        preferredName = "Preferred"
+        phoneNumber = "123456789"
+        cursor = databaseclient.connection.cursor(pymysql.cursors.DictCursor)
+        cursor.execute("""INSERT INTO client (id, first_name, last_name, preferred_name, phone_number, address, note_id, archived, created, last_edited, user_id)
+                        VALUES (%s, 'First', 'Last', %s, %s, 'Address', NULL, 0, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), 1)""",
+                        [clientId, preferredName, phoneNumber])
+        databaseclient.connection.commit()
+        cursor.callproc("ViewClients", ['phone_number', '13748478', None])
         for result in cursor:
             self.assertEqual(result["id"], clientId)
             self.assertEqual(result["preferred_name"], preferredName)
