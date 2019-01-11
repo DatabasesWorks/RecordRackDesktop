@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>Record Rack core</DisplayName>
+    <Description>Contains the core binaries of Record Rack.</Description>
+    <Version>2.0.0-1</Version>
+    <ReleaseDate>2019-03-21</ReleaseDate>
+    <Licenses>
+        <License name="General Public License Agreement" file="license.txt" />
+    </Licenses>
+    <Default>true</Default>
+    <Script>installscript.qs</Script>
+</Package>

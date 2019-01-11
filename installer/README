@@ -1,0 +1,4 @@
+# Instructions to build installer
+1. Run the following command:
+    $QTIFWDIR/bin/binarycreator -c installer\config\config.xml -p installer\packages YourInstaller.exe (WINDOWS)
+	$QTIFWDIR/bin/binarycreator -c installer/config/config.xml -p installer/packages/ RecordRack (LINUX)
