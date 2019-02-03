@@ -21,4 +21,21 @@ FluidControls.ApplicationWindow {
 
     RRUi.SnackBar { id: snackBar }
     RR.Settings { id: settings }
+
+    RR.TapTargetFinder {
+        tapTargets: applicationWindow.pageStack.currentItem.tapTargets
+        onFound: {
+            tapTargetViewLoader.active = true;
+            tapTargetViewLoader.item.queueTarget(tapTarget);
+        }
+        onCleared: tapTargetViewLoader.active = false;
+    }
+
+    Loader {
+        id: tapTargetViewLoader
+        anchors.fill: parent
+        active: false
+        source: Qt.resolvedUrl("TapTargetView.qml")
+        z: 10
+    }
 }

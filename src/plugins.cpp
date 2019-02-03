@@ -33,6 +33,8 @@
 #include "rrcore/qmlapi/qmlsettings.h"
 #include "rrcore/qmlapi/qmlpurchasetransactionmodel.h"
 #include "rrcore/qmlapi/qmlpurchasetransactionitemmodel.h"
+#include "rrcore/qmlapi/qmltaptarget.h"
+#include "rrcore/qmlapi/qmltaptargetfinder.h"
 
 #include "rrcore/widgets/dialogs.h"
 
@@ -51,6 +53,8 @@ void Plugins::registerTypes()
     qmlRegisterType<QMLDatabaseCreator>("com.gecko.rr", 1, 0, "DatabaseCreator");
     qmlRegisterSingletonType<QMLNotifier>("com.gecko.rr", 1, 0, "Notifier", notifier_provider);
     qmlRegisterType<QMLSettings>("com.gecko.rr", 1, 0, "Settings");
+    qmlRegisterType<QMLTapTarget>("com.gecko.rr", 1, 0, "TapTarget");
+    qmlRegisterType<QMLTapTargetFinder>("com.gecko.rr", 1, 0, "TapTargetFinder");
 
     // Models
     qmlRegisterType<QMLDashboardHomeModel>("com.gecko.rr.models", 1, 0, "DashboardHomeModel");

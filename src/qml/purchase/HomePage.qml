@@ -2,6 +2,7 @@ import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.Material 2.3
 import Fluid.Controls 1.0 as FluidControls
+import com.gecko.rr 1.0 as RR
 import com.gecko.rr.models 1.0 as RRModels
 import "../rrui" as RRUi
 import "../common"
@@ -16,10 +17,17 @@ RRUi.Page {
 
     actions: [
         FluidControls.Action {
+            objectName: "purchase/HomePage/addNewItemAction"
             icon.source: FluidControls.Utils.iconUrl("navigation/more_vert")
             text: qsTr("Add a new item.")
             onTriggered: bottomSheet.open();
             toolTip: qsTr("More options")
+        }
+    ]
+
+    tapTargets: [
+        RR.TapTarget {
+            targetName: "purchase/HomePage/addPurchaseButton"
         }
     ]
 
@@ -34,6 +42,7 @@ RRUi.Page {
         }
 
         RRUi.FloatingActionButton {
+            objectName: "purchase/HomePage/addPurchaseButton"
             anchors {
                 right: homeListView.right
                 bottom: homeListView.bottom
