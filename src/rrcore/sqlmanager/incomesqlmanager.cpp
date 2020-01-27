@@ -6,7 +6,7 @@
 
 #include "database/databaseexception.h"
 #include "database/databaseutils.h"
-#include "singletons/userprofile.h"
+#include "user/userprofile.h"
 
 IncomeSqlManager::IncomeSqlManager(const QString &connectionName) :
     AbstractSqlManager (connectionName)
@@ -26,7 +26,8 @@ QueryResult IncomeSqlManager::execute(const QueryRequest &request)
         else if (request.command() == "view_income_report")
             viewIncomeReport(request, result);
         else
-            throw DatabaseException(DatabaseException::RRErrorCode::CommandNotFound, QString("Command not found: %1").arg(request.command()));
+            throw DatabaseException(DatabaseError::QueryErrorCode::CommandNotFound,
+                                    QString("Command not found: %1").arg(request.command()));
 
         result.setSuccessful(true);
     } catch (DatabaseException &e) {
@@ -48,8 +49,7 @@ void IncomeSqlManager::addNewIncomeTransaction(const QueryRequest &request)
     QSqlQuery q(connection);
 
     try {
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
+        DatabaseUtils::beginTransaction(q);
 
         if (params.contains("note")) {
             // STEP: Insert note
@@ -100,12 +100,9 @@ void IncomeSqlManager::addNewIncomeTransaction(const QueryRequest &request)
                           }
                       });
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
+        DatabaseUtils::commitTransaction(q);
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -118,9 +115,6 @@ void IncomeSqlManager::viewIncomeTransactions(const QueryRequest &request, Query
     QSqlQuery q(connection);
 
     try {
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
-
         // STEP: Insert income transaction
         const QList<QSqlRecord> &records (callProcedure("ViewIncomeTransactions", {
                                                             ProcedureArgument {
@@ -150,12 +144,7 @@ void IncomeSqlManager::viewIncomeTransactions(const QueryRequest &request, Query
                               { "record_count", transactions.count() }
                           });
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
         throw;
     }
 }
@@ -204,8 +193,9 @@ void IncomeSqlManager::viewIncomeReport(const QueryRequest &request, QueryResult
             transactions.append(recordToMap(record));
         }
 
-        result.setOutcome(QVariantMap { { "transactions", transactions },
-                                        { "record_count", transactions.count() },
+        result.setOutcome(QVariantMap {
+                              { "transactions", transactions },
+                              { "record_count", transactions.count() },
                           });
     } catch (DatabaseException &) {
         throw;

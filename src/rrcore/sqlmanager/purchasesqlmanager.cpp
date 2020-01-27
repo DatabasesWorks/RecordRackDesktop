@@ -5,7 +5,7 @@
 #include <QSqlError>
 #include "database/databaseexception.h"
 #include "database/databaseutils.h"
-#include "singletons/userprofile.h"
+#include "user/userprofile.h"
 
 PurchaseSqlManager::PurchaseSqlManager(const QString &connectionName) :
     AbstractSqlManager (connectionName)
@@ -22,7 +22,7 @@ QueryResult PurchaseSqlManager::execute(const QueryRequest &request)
             viewPurchaseHome(request, result);
         else if (request.command() == "add_purchase_transaction")
             addPurchaseTransaction(request, result);
-        else if (request.command() == "update_suspend_transaction")
+        else if (request.command() == "update_suspended_transaction")
             updateSuspendedTransaction(request, result);
         else if (request.command() == "view_purchase_cart")
             viewPurchaseCart(request, result);
@@ -39,7 +39,8 @@ QueryResult PurchaseSqlManager::execute(const QueryRequest &request)
         else if (request.command() == "view_purchase_report")
             viewPurchaseReport(request, result);
         else
-            throw DatabaseException(DatabaseException::RRErrorCode::CommandNotFound, QString("Command not found: %1").arg(request.command()));
+            throw DatabaseException(DatabaseError::QueryErrorCode::CommandNotFound,
+                                    QString("Command not found: %1").arg(request.command()));
 
         result.setSuccessful(true);
     } catch (DatabaseException &e) {
@@ -122,9 +123,8 @@ void PurchaseSqlManager::addPurchaseTransaction(const QueryRequest &request, Que
     try {
         //        AbstractSqlManager::enforceArguments( { "action" }, params);
 
-        if (mode == TransactionMode::UseSqlTransaction && !DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(),
-                                    QStringLiteral("Failed to start transation."));
+        if (mode == TransactionMode::UseSqlTransaction)
+            DatabaseUtils::beginTransaction(q);
 
         // STEP: Add client, if client does not exist.
         if (!params.value("customer_phone_number").toString().trimmed().isEmpty() && !params.value("suspended").toBool()) {
@@ -522,9 +522,8 @@ void PurchaseSqlManager::addPurchaseTransaction(const QueryRequest &request, Que
                                     });
         }
 
-        if (mode == TransactionMode::UseSqlTransaction && !DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(),
-                                    QStringLiteral("Failed to commit."));
+        if (mode == TransactionMode::UseSqlTransaction)
+            DatabaseUtils::commitTransaction(q);
 
         QVariantMap outcome;
         outcome.insert("client_id", clientId);
@@ -532,8 +531,8 @@ void PurchaseSqlManager::addPurchaseTransaction(const QueryRequest &request, Que
 
         result.setOutcome(outcome);
     } catch (DatabaseException &) {
-        if (mode == TransactionMode::UseSqlTransaction && !DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
+        if (mode == TransactionMode::UseSqlTransaction)
+            DatabaseUtils::rollbackTransaction(q);
 
         throw;
     }
@@ -547,8 +546,7 @@ void PurchaseSqlManager::updateSuspendedTransaction(const QueryRequest &request,
     QSqlQuery q(connection);
 
     try {
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
+        DatabaseUtils::beginTransaction(q);
 
         const QList<QSqlRecord> &records(callProcedure("IsPurchaseTransactionSuspended", {
                                                            ProcedureArgument {
@@ -559,7 +557,7 @@ void PurchaseSqlManager::updateSuspendedTransaction(const QueryRequest &request,
                                                        }));
 
         if (!records.first().value("suspended").toBool())
-            throw DatabaseException(DatabaseException::RRErrorCode::UpdateTransactionFailure, QString(), "Transaction must be suspended.");
+            throw DatabaseException(DatabaseError::QueryErrorCode::UpdateTransactionFailure, QString(), "Transaction must be suspended.");
 
         addPurchaseTransaction(request, result, TransactionMode::SkipSqlTransaction);
 
@@ -576,12 +574,9 @@ void PurchaseSqlManager::updateSuspendedTransaction(const QueryRequest &request,
                           }
                       });
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
+        DatabaseUtils::commitTransaction(q);
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -642,8 +637,7 @@ void PurchaseSqlManager::undoAddPurchaseTransaction(const QueryRequest &request,
     QSqlQuery q(connection);
 
     try {
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
+        DatabaseUtils::beginTransaction(q);
 
         if (params.value("transaction_id").toInt() > 0) {
             callProcedure("ArchivePurchaseTransaction", {
@@ -719,14 +713,10 @@ void PurchaseSqlManager::undoAddPurchaseTransaction(const QueryRequest &request,
                           }
                       });
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
-
+        DatabaseUtils::commitTransaction(q);
         result.setOutcome(request.params());
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -819,6 +809,8 @@ void PurchaseSqlManager::removePurchaseTransaction(const QueryRequest &request, 
     try {
         AbstractSqlManager::enforceArguments({ "transaction_id" }, params);
 
+        DatabaseUtils::beginTransaction(q);
+
         callProcedure("ArchivePurchaseTransaction", {
                           ProcedureArgument {
                               ProcedureArgument::Type::In,
@@ -896,8 +888,10 @@ void PurchaseSqlManager::removePurchaseTransaction(const QueryRequest &request, 
                           }
                       });
 
+        DatabaseUtils::commitTransaction(q);
         result.setOutcome(QVariantMap { { "transaction_id", params.value("transaction_id").toInt() }, { "record_count", 1 } });
     } catch (DatabaseException &) {
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -910,6 +904,8 @@ void PurchaseSqlManager::undoRemovePurchaseTransaction(const QueryRequest &reque
 
     try {
         AbstractSqlManager::enforceArguments({ "transaction_id" }, params);
+
+        DatabaseUtils::beginTransaction(q);
 
         callProcedure("ArchivePurchaseTransaction", {
                           ProcedureArgument {
@@ -988,8 +984,10 @@ void PurchaseSqlManager::undoRemovePurchaseTransaction(const QueryRequest &reque
                           }
                       });
 
+        DatabaseUtils::commitTransaction(q);
         result.setOutcome(QVariantMap { { "transaction_id", params.value("transaction_id").toInt() }, { "record_count", 1 } });
     } catch (DatabaseException &) {
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }

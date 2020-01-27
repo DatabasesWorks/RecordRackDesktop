@@ -15,9 +15,12 @@
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 
-#include "singletons/userprofile.h"
+#include "user/userprofile.h"
+#include "user/businessdetails.h"
 #include "singletons/settings.h"
 #include "models/receiptcartmodel.h"
+
+Q_LOGGING_CATEGORY(qmlReceiptPrinter, "rrcore.qmlapi.qmlReceiptPrinter");
 
 QMLReceiptPrinter::QMLReceiptPrinter(QObject *parent) :
     QObject(parent)
@@ -55,12 +58,9 @@ void QMLReceiptPrinter::print(const QString &job)
             return;
         }
 
-        qDebug() << "Printer sizes:" << printer->width() << printer->height() << printer->widthMM() << printer->heightMM();
-        qDebug() << "Resolutions " << printer->supportedResolutions() << printer->resolution();
         m_result = receipt->grabToImage(QSize(printer->width() * 2, 400));
         connect(m_result.data(), &QQuickItemGrabResult::ready, this, [this, receipt, printer]() {
             QPainter painter(printer);
-            qDebug() << "Image size:" << m_result->image() << m_result->image().size();
             m_result->saveToFile("/tmp/receipt.png");
             painter.drawImage(QPoint(0, 0), m_result->image());
             painter.end();

@@ -11,13 +11,13 @@ RRUi.HomeListViewBase {
     id: homeListView
 
     topMargin: 40
-    bottomMargin: 40
+    bottomMargin: 100
     spacing: 16
 
     model: RRModels.SaleHomeModel { }
     delegate: Loader {
         width: ListView.view.width
-        active: false
+        active: true
         onLoaded: item.model = data_model;
 
         source: {

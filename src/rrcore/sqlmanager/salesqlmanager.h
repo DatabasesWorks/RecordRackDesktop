@@ -3,7 +3,7 @@
 
 #include "abstractsqlmanager.h"
 
-#include "singletons/userprofile.h"
+#include "user/userprofile.h"
 #include "database/databaseexception.h"
 #include "database/databaseutils.h"
 
@@ -14,7 +14,7 @@ public:
 
     QueryResult execute(const QueryRequest &request) override final;
 private:
-    void addSaleTransaction(const QueryRequest &request, QueryResult &result, bool skipSqlTransaction = false); // throws DatabaseException
+    void addSaleTransaction(const QueryRequest &request, QueryResult &result, TransactionMode mode = TransactionMode::UseSqlTransaction); // throws DatabaseException
     void updateSuspendedTransaction(const QueryRequest &request, QueryResult &result); // throws DatabaseException
     void viewSaleCart(const QueryRequest &request, QueryResult &result); // throws DatabaseException
     void undoAddSaleTransaction(const QueryRequest &request, QueryResult &result); // throws DatabaseException

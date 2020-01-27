@@ -21,22 +21,13 @@ public:
         UndoRemoveTransactionError
     }; Q_ENUM(ErrorCode)
 
-    enum FilterColumn {
-        TransactionColumn,
-        ClientIdColumn,
+    enum Columns {
+        TransactionIdColumn,
         CustomerNameColumn,
         TotalCostColumn,
-        AmountPaidColumn,
-        BalanceColumn,
-        DiscountColumn,
-        NoteIdColumn,
-        NoteColumn,
-        SuspendedColumn,
-        ArchivedColumn,
-        CreatedColumn,
-        LastEditedColumn,
-        UserIdColumn
-    }; Q_ENUM(FilterColumn)
+        ActionColumn,
+        ColumnCount
+    }; Q_ENUM(Columns)
 
     enum Roles {
         TransactionIdRole = Qt::UserRole,
@@ -56,12 +47,13 @@ public:
     };
 
     explicit QMLPurchaseTransactionModel(QObject *parent = nullptr);
-    explicit QMLPurchaseTransactionModel(DatabaseThread &thread);
+    explicit QMLPurchaseTransactionModel(DatabaseThread &thread, QObject *parent = nullptr);
 
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     int columnCount(const QModelIndex &parent = QModelIndex()) const override;
     QHash<int, QByteArray> roleNames() const override;
+    Q_INVOKABLE QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 protected:
     void tryQuery() override;
     void processResult(const QueryResult result) override;

@@ -1,20 +1,17 @@
 #include "abstractdetailrecord.h"
 #include "database/databasethread.h"
+#include "database/queryexecutor.h"
 
 AbstractDetailRecord::AbstractDetailRecord(QObject *parent) :
+    AbstractDetailRecord(DatabaseThread::instance(), parent)
+{}
+
+AbstractDetailRecord::AbstractDetailRecord(DatabaseThread &thread, QObject *parent) :
     QObject(parent),
     m_autoQuery(true),
     m_busy(false)
 {
-    connect(this, &AbstractDetailRecord::executeRequest, &DatabaseThread::instance(), &DatabaseThread::execute);
-    connect(&DatabaseThread::instance(), &DatabaseThread::resultReady, this, &AbstractDetailRecord::processResult);
-}
-
-AbstractDetailRecord::AbstractDetailRecord(DatabaseThread &thread) :
-    m_autoQuery(true),
-    m_busy(false)
-{
-    connect(this, &AbstractDetailRecord::executeRequest, &thread, &DatabaseThread::execute);
+    connect(this, &AbstractDetailRecord::execute, &thread, &DatabaseThread::execute);
     connect(&thread, &DatabaseThread::resultReady, this, &AbstractDetailRecord::processResult);
 }
 
@@ -51,6 +48,11 @@ void AbstractDetailRecord::componentComplete()
 {
     if (m_autoQuery)
         tryQuery();
+}
+
+void AbstractDetailRecord::refresh()
+{
+
 }
 
 void AbstractDetailRecord::setBusy(bool busy)

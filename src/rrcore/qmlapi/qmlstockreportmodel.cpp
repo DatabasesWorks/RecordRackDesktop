@@ -1,17 +1,14 @@
 #include "qmlstockreportmodel.h"
-
-const int COLUMN_COUNT = 7;
+#include "database/databasethread.h"
+#include "queryexecutors/stock.h"
 
 QMLStockReportModel::QMLStockReportModel(QObject *parent) :
-    AbstractVisualTableModel (parent)
+    QMLStockReportModel(DatabaseThread::instance(), parent)
+{}
+
+QMLStockReportModel::QMLStockReportModel(DatabaseThread &thread, QObject *parent) :
+    AbstractVisualTableModel (thread, parent)
 {
-
-}
-
-QMLStockReportModel::QMLStockReportModel(DatabaseThread &thread) :
-    AbstractVisualTableModel (thread)
-{
-
 }
 
 int QMLStockReportModel::rowCount(const QModelIndex &parent) const
@@ -27,7 +24,7 @@ int QMLStockReportModel::columnCount(const QModelIndex &parent) const
     if (parent.isValid())
         return 0;
 
-    return COLUMN_COUNT;
+    return ColumnCount;
 }
 
 QVariant QMLStockReportModel::data(const QModelIndex &index, int role) const
@@ -68,12 +65,60 @@ QHash<int, QByteArray> QMLStockReportModel::roleNames() const
     };
 }
 
+QVariant QMLStockReportModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+   if (orientation == Qt::Horizontal) {
+        if (role == Qt::DisplayRole) {
+            switch (section) {
+            case CategoryColumn:
+                return tr("Category");
+            case ItemColumn:
+                return tr("Item");
+            case OpeningStockQuantityColumn:
+                return tr("Opening stock qty");
+            case QuantitySoldColumn:
+                return tr("Qty sold");
+            case QuantityBoughtColumn:
+                return tr("Qty bought");
+            case QuantityInStockColumn:
+                return tr("Qty in stock");
+            }
+        } else if (role == Qt::TextAlignmentRole) {
+            switch (section) {
+            case CategoryColumn:
+            case ItemColumn:
+                return Qt::AlignLeft;
+            case OpeningStockQuantityColumn:
+            case QuantitySoldColumn:
+            case QuantityBoughtColumn:
+            case QuantityInStockColumn:
+                return Qt::AlignRight;
+            }
+        } else if (role == Qt::SizeHintRole) {
+            switch (section) {
+            case CategoryColumn:
+                return 130;
+            case ItemColumn:
+                return tableViewWidth() - 130 -130 -130 - 130 - 130;
+            case OpeningStockQuantityColumn:
+                return 130;
+            case QuantitySoldColumn:
+                return 130;
+            case QuantityBoughtColumn:
+                return 130;
+            case QuantityInStockColumn:
+                return 130;
+            }
+        }
+    }
+
+    return section + 1;
+}
+
 void QMLStockReportModel::tryQuery()
 {
     setBusy(true);
-    QueryRequest request(this);
-    request.setCommand("view_stock_report", { }, QueryRequest::Stock);
-    emit executeRequest(request);
+    emit execute(new StockQuery::ViewStockReport(this));
 }
 
 void QMLStockReportModel::processResult(const QueryResult result)
@@ -83,7 +128,7 @@ void QMLStockReportModel::processResult(const QueryResult result)
 
     setBusy(false);
     if (result.isSuccessful()) {
-        if (result.request().command() == "view_stock_report") {
+        if (result.request().command() == StockQuery::ViewStockReport::COMMAND) {
             beginResetModel();
             m_records = result.outcome().toMap().value("items").toList();
             endResetModel();

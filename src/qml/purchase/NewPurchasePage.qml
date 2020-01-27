@@ -79,7 +79,7 @@ RRUi.Page {
     contentItem: RRUi.TransitionView {
         id: transitionView
 
-        transitionComponent: Item {
+        component: Item {
             id: purchaseContentItem
 
             readonly property int itemCount: cartListView.count
@@ -172,7 +172,7 @@ RRUi.Page {
                         }
 
                         filterText: searchBar.text
-                        filterColumn: RRModels.StockCategoryItemModel.ItemColumn
+                        filterColumn: RRModels.StockItemModel.ItemColumn
 
                         buttonRow: Row {
                             spacing: 0

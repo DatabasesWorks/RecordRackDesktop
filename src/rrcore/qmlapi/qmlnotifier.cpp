@@ -1,6 +1,8 @@
 #include "qmlnotifier.h"
 #include <QVariant>
 #include <QProcess>
+#include <QLoggingCategory>
+#include "network/networkthread.h"
 
 // Urgency (u) - Low, Normal, Critical
 // Expire-time (t) - Timeout in ms
@@ -8,14 +10,17 @@
 // Icon (i) - icon file name
 // Category (c) - Notification category
 
+Q_LOGGING_CATEGORY(qmlNotifier, "rrcore.qmlapi.qmlNotifier", QtWarningMsg);
+
 const int SHORT_DURATION = 5000;
 const int LONG_DURATION = 8000;
-const QString LOGO_FILE("/home/obeezzy/Documents/AllCodes/QtProjects/RecordRackDesktop/logo.png");
+const QString LOGO_FILE(":/images/rr_logo.png");
 
 QMLNotifier::QMLNotifier(QObject *parent) :
     QObject(parent)
 {
-
+    connect(&NetworkThread::instance(), &NetworkThread::responseReady,
+            this, &QMLNotifier::displayServerStatus);
 }
 
 void QMLNotifier::show(QMLNotifier::Category category, const QString &title, const QString &message,
@@ -82,6 +87,14 @@ void QMLNotifier::displayNotificationOnLinux(QMLNotifier::Category category, con
     notifySend.start();
     notifySend.waitForStarted();
     notifySend.waitForFinished();
+}
+
+void QMLNotifier::displayServerStatus(const ServerResponse response)
+{
+    if (response.isSuccessful())
+        show(Category::Stock, "There was no error", "No error at all!");
+    else
+        show(Category::Stock, "There was an error", "What happened?");
 }
 
 void QMLNotifier::displayNotificationOnWindows(QMLNotifier::Category category, const QString &title,

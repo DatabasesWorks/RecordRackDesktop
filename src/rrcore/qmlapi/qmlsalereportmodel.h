@@ -6,6 +6,7 @@
 
 class QMLSaleReportModel : public AbstractVisualTableModel
 {
+    Q_OBJECT
 public:
     enum Roles {
         CategoryRole = Qt::UserRole,
@@ -15,17 +16,26 @@ public:
         UnitRole
     };
 
+    enum Columns {
+        CategoryColumn,
+        ItemColumn,
+        QuantitySoldColumn,
+        TotalAmountColumn,
+        ColumnCount
+    }; Q_ENUM(Columns)
+
     enum SuccessCode {
         ViewSalesReportSuccess
     }; Q_ENUM(SuccessCode)
 
     explicit QMLSaleReportModel(QObject *parent = nullptr);
-    explicit QMLSaleReportModel(DatabaseThread &thread);
+    explicit QMLSaleReportModel(DatabaseThread &thread, QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &index = QModelIndex()) const override;
     int columnCount(const QModelIndex &index = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QHash<int, QByteArray> roleNames() const override;
+    QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 protected:
     void tryQuery() override;
     void processResult(const QueryResult result) override;

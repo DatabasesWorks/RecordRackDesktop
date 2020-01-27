@@ -7,7 +7,6 @@
 #include "rrcore/qmlapi/qmldatabasecreator.h"
 
 #include "rrcore/qmlapi/qmldashboardhomemodel.h"
-#include "rrcore/qmlapi/qmlstockcategoryitemmodel.h"
 #include "rrcore/qmlapi/qmlstockitempusher.h"
 #include "rrcore/qmlapi/qmlsalecartmodel.h"
 #include "rrcore/qmlapi/qmlsaletransactionmodel.h"
@@ -41,8 +40,14 @@
 #include "rrcore/qmlapi/qmlpurchasereportmodel.h"
 #include "rrcore/qmlapi/qmlincomereportmodel.h"
 #include "rrcore/qmlapi/qmlexpensereportmodel.h"
+#include "rrcore/qmlapi/qmlexpensetransactionmodel.h"
+#include "rrcore/qmlapi/qmlstockitemmodel.h"
+#include "rrcore/qmlapi/qmlstockitemcountrecord.h"
 
 #include "rrcore/widgets/dialogs.h"
+#include "rrcore/user/businessdetails.h"
+#include "rrcore/user/businessstore.h"
+#include "rrcore/user/businessstoremodel.h"
 
 const QString FONT_DIR(":/fonts");
 
@@ -60,9 +65,12 @@ void Plugins::registerTypes()
     qmlRegisterType<QMLSettings>("com.gecko.rr", 1, 0, "Settings");
     qmlRegisterType<QMLReceiptPrinter>("com.gecko.rr", 1, 0, "ReceiptPrinter");
 
+    qmlRegisterUncreatableType<BusinessDetails>("com.gecko.rr", 1, 0, "BusinessDetails", "Don't you dare create me!");
+    qmlRegisterUncreatableType<BusinessStore>("com.gecko.rr", 1, 0, "BusinessStore", "Don't you dare create me!");
+    qmlRegisterUncreatableType<BusinessStoreModel>("com.gecko.rr", 1, 0, "BusinessStoreModel", "Don't you dare create me!");
+
     // Models
     qmlRegisterType<QMLDashboardHomeModel>("com.gecko.rr.models", 1, 0, "DashboardHomeModel");
-    qmlRegisterType<QMLStockCategoryItemModel>("com.gecko.rr.models", 1, 0, "StockCategoryItemModel");
     qmlRegisterType<QMLStockItemPusher>("com.gecko.rr.models", 1, 0, "StockItemPusher");
     qmlRegisterType<QMLSaleCartModel>("com.gecko.rr.models", 1, 0, "SaleCartModel");
     qmlRegisterType<QMLSaleTransactionModel>("com.gecko.rr.models", 1, 0, "SaleTransactionModel");
@@ -92,6 +100,9 @@ void Plugins::registerTypes()
     qmlRegisterType<QMLPurchaseReportModel>("com.gecko.rr.models", 1, 0, "PurchaseReportModel");
     qmlRegisterType<QMLIncomeReportModel>("com.gecko.rr.models", 1, 0, "IncomeReportModel");
     qmlRegisterType<QMLExpenseReportModel>("com.gecko.rr.models", 1, 0, "ExpenseReportModel");
+    qmlRegisterType<QMLExpenseTransactionModel>("com.gecko.rr.models", 1, 0, "ExpenseTransactionModel");
+    qmlRegisterType<QMLStockItemModel>("com.gecko.rr.models", 1, 0, "StockItemModel");
+    qmlRegisterType<QMLStockItemCountRecord>("com.gecko.rr.models", 1, 0, "StockItemCountRecord");
 
     // Components
     qmlRegisterType<QMLDoubleValidator>("com.gecko.rr.components", 1, 0, "DoubleValidator");
@@ -105,7 +116,7 @@ void Plugins::registerFonts()
     QDirIterator iter(FONT_DIR);
     while (iter.hasNext()) {
         const QString &fontPath = iter.next();
-        qDebug() << "Adding font..." << fontPath;
+        qInfo() << "Adding font..." << fontPath;
         QFontDatabase::addApplicationFont(fontPath);
     }
 }

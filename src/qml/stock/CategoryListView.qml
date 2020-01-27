@@ -1,4 +1,5 @@
 import QtQuick 2.12
+import Qt.labs.qmlmodels 1.0
 import QtQuick.Controls 2.12 as QQC2
 import QtQuick.Layouts 1.3 as QQLayouts
 import QtQuick.Controls.Material 2.3
@@ -9,26 +10,52 @@ import com.gecko.rr.models 1.0 as RRModels
 ListView {
     id: categoryListView
 
+    enum FilterColumn {
+        Category,
+        Item
+    }
+
     property Component buttonRow: null
     property string filterText: ""
     property int filterColumn: -1
+    property int sortColumn: -1
+    property alias busy: stockCategoryModel.busy
 
     signal success(int successCode)
     signal error(int errorCode)
+    signal modelReset
 
     function refresh() { categoryListView.model.refresh(); }
-    function undoLastCommit() { categoryListView.model.undoLastCommit(); }
+    function undoLastCommit() { stockCategoryModel.unarchiveItem(privateProperties.lastRemovedItemId); }
+
+    QtObject {
+        id: privateProperties
+
+        property int lastRemovedItemId: -1
+    }
 
     topMargin: 20
     bottomMargin: 20
     clip: true
     visible: !model.busy
 
-    model: RRModels.StockCategoryItemModel {
-        filterText: categoryListView.filterText
-        filterColumn: categoryListView.filterColumn
-        onSuccess: categoryListView.success(successCode);
-        onError: categoryListView.error(errorCode);
+    model: RRModels.StockCategoryModel {
+        id: stockCategoryModel
+        filterText: categoryListView.filterColumn === -1 ? categoryListView.filterText : ""
+        itemFilterText: categoryListView.filterColumn === RRModels.StockItemModel.ItemColumn ? categoryListView.filterText : ""
+        onSuccess: {
+            switch (successCode) {
+            case RRModels.StockCategoryModel.RemoveStockCategorySuccess:
+                categoryListView.success(RRModels.StockItemModel.RemoveStockItemSuccess);
+                break;
+            case RRModels.StockCategoryModel.UnarchiveItemSuccess:
+                privateProperties.lastRemovedItemId = -1;
+                categoryListView.success(RRModels.StockItemModel.UndoRemoveStockItemSuccess);
+                break;
+            }
+        }
+
+        onModelReset: categoryListView.modelReset();
     }
 
     QQC2.ScrollBar.vertical: RRUi.ScrollBar {
@@ -37,9 +64,18 @@ ListView {
     }
 
     delegate: RRUi.Card {
+        id: categoryCard
+
+        readonly property int row: index
+
         width: ListView.view.width
         height: column.height
         Material.elevation: 0
+
+        Connections {
+            target: stockCategoryModel
+            onDataChanged: if (topLeft.row === categoryCard.row) itemTableView.refresh();
+        }
 
         Column {
             id: column
@@ -50,7 +86,7 @@ ListView {
             }
 
             Item {
-                visible: index !== 0
+                visible: categoryCard.row !== 0
                 width: 1
                 height: 24
             }
@@ -60,7 +96,8 @@ ListView {
                 text: category
             }
 
-            ListView {
+            ItemTableView {
+                id: itemTableView
                 anchors {
                     left: parent.left
                     right: parent.right
@@ -68,104 +105,24 @@ ListView {
                     bottomMargin: 20
                 }
 
-                height: contentHeight
-                model: item_model
-
-                delegate: FluidControls.ListItem {
-                    id: itemListItem
-                    width: ListView.view.width
-                    height: 40
-                    showDivider: true
-                    clip: true
-                    padding: 0
-
-                    QQLayouts.RowLayout {
-                        anchors.fill: parent
-                        spacing: 16
-
-                        RRUi.LetterCircleImage {
-                            QQLayouts.Layout.alignment: Qt.AlignVCenter
-                            name: model.item
-                            source: model.image_source
-                            sourceSize: Qt.size(width, height)
-                        }
-
-                        FluidControls.SubheadingLabel {
-                            QQLayouts.Layout.alignment: Qt.AlignVCenter
-                            QQLayouts.Layout.fillWidth: true
-                            text: item
-                        }
-
-                        Loader {
-                            id: rightButtonLoader
-
-                            readonly property var modelData: {
-                                "category_id": category_id,
-                                "category": category,
-                                "item_id": model.item_id,
-                                "item": model.item,
-                                "unit_id": model.unit_id,
-                                "unit": model.unit,
-                                "quantity": model.quantity,
-                                "retail_price": model.retail_price,
-                                "cost_price": model.cost_price
-                            }
-
-                            QQLayouts.Layout.fillHeight: true
-                            QQLayouts.Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-                            sourceComponent: categoryListView.buttonRow
-                        }
+                categoryId: category_id
+                filterText: categoryListView.filterText
+                filterColumn: categoryListView.filterColumn
+                sortColumn: categoryListView.sortColumn
+                buttonRow: categoryListView.buttonRow
+                onItemRemoved: privateProperties.lastRemovedItemId = itemId;
+                onSuccess: {
+                    switch (successCode) {
+                    case RRModels.StockItemModel.RemoveItemSuccess:
+                        if (itemTableView.rows === 1)
+                            stockCategoryModel.removeCategory(categoryCard.row);
                     }
-                }
 
-                add: Transition {
-                    PropertyAction { property: "height"; value: 0 }
-                    PropertyAction { property: "opacity"; value: 0 }
-
-                    SequentialAnimation {
-                        NumberAnimation { property: "height"; to: 40; duration: 300; easing.type: Easing.InOutQuad }
-                        NumberAnimation { property: "opacity"; to: 1; duration: 300; easing.type: Easing.OutCubic }
-                    }
+                    categoryListView.success(successCode);
                 }
-
-                displaced: Transition {
-                    SequentialAnimation {
-                        PauseAnimation { duration: 125 }
-                        NumberAnimation { property: "y"; easing.type: Easing.InOutQuad }
-                    }
-                }
-                remove: Transition {
-                    SequentialAnimation {
-                        PauseAnimation { duration: 125 }
-                        NumberAnimation { property: "height"; to: 0; easing.type: Easing.InOutQuad }
-                    }
-                }
-
-                Behavior on height {
-                    SequentialAnimation {
-                        PauseAnimation { duration: 125 }
-                        NumberAnimation { }
-                    }
-                }
+                onError: categoryListView.error(errorCode);
+                onModelReset: categoryListView.modelReset();
             }
-        }
-    }
-
-    add: Transition {
-        NumberAnimation { property: "y"; from: 100; duration: 300; easing.type: Easing.OutCubic }
-        NumberAnimation { property: "opacity"; to: 1; duration: 300; easing.type: Easing.OutCubic }
-    }
-
-    displaced: Transition {
-        SequentialAnimation {
-            PauseAnimation { duration: 125 }
-            NumberAnimation { property: "y"; easing.type: Easing.InOutQuad }
-        }
-    }
-    remove: Transition {
-        SequentialAnimation {
-            PauseAnimation { duration: 125 }
-            NumberAnimation { property: "height"; to: 0; easing.type: Easing.InOutQuad }
         }
     }
 }

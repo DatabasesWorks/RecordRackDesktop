@@ -3,7 +3,7 @@
 #include <QCoreApplication>
 
 #include "qmlapi/qmluserprofile.h"
-#include "database/databaseexception.h"
+#include "database/databaseerror.h"
 #include "mockdatabasethread.h"
 
 class QMLUserProfileTest : public QObject
@@ -37,12 +37,11 @@ QMLUserProfileTest::QMLUserProfileTest() :
 
 void QMLUserProfileTest::init()
 {
-    m_userProfile = new QMLUserProfile(m_thread);
+    m_userProfile = new QMLUserProfile(m_thread, this);
 }
 
 void QMLUserProfileTest::cleanup()
 {
-    m_userProfile->deleteLater();
 }
 
 void QMLUserProfileTest::testSignUp()
@@ -59,6 +58,7 @@ void QMLUserProfileTest::testSignUp()
     m_userProfile->signUp(QStringLiteral("marines"), QStringLiteral("marines"));
     QCOMPARE(successSpy.count(), 1);
     QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(successSpy.takeFirst().at(0).toInt(), static_cast<int>(QMLUserProfile::SignUpSuccess));
 }
 
 void QMLUserProfileTest::testSignIn()
@@ -76,6 +76,7 @@ void QMLUserProfileTest::testSignIn()
 
     QCOMPARE(successSpy.count(), 1);
     QCOMPARE(errorSpy.count(), 0);
+    QCOMPARE(successSpy.takeFirst().at(0).toInt(), static_cast<int>(QMLUserProfile::SignInSuccess));
 }
 
 void QMLUserProfileTest::testIncorrectCredentialsError()
@@ -83,7 +84,7 @@ void QMLUserProfileTest::testIncorrectCredentialsError()
     auto databaseWillReturnSignInFailure = [this]() {
         m_result.setSuccessful(false);
         m_result.setOutcome(QVariant());
-        m_result.setErrorCode(static_cast<int>(DatabaseException::RRErrorCode::SignInFailure));
+        m_result.setErrorCode(static_cast<int>(DatabaseError::QueryErrorCode::SignInFailure));
     };
     QSignalSpy successSpy(m_userProfile, &QMLUserProfile::success);
     QSignalSpy errorSpy(m_userProfile, &QMLUserProfile::error);

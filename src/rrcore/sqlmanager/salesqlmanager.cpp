@@ -31,7 +31,8 @@ QueryResult SaleSqlManager::execute(const QueryRequest &request)
         else if (request.command() == "view_sale_report")
             viewSaleReport(request, result);
         else
-            throw DatabaseException(DatabaseException::RRErrorCode::CommandNotFound, QString("Command not found: %1").arg(request.command()));
+            throw DatabaseException(DatabaseError::QueryErrorCode::CommandNotFound,
+                                    QString("Command not found: %1").arg(request.command()));
 
         result.setSuccessful(true);
     } catch (DatabaseException &e) {
@@ -44,7 +45,7 @@ QueryResult SaleSqlManager::execute(const QueryRequest &request)
     return result;
 }
 
-void SaleSqlManager::addSaleTransaction(const QueryRequest &request, QueryResult &result, bool skipSqlTransaction)
+void SaleSqlManager::addSaleTransaction(const QueryRequest &request, QueryResult &result, TransactionMode mode)
 {
     QSqlDatabase connection = QSqlDatabase::database(connectionName());
     const QVariantMap &params = request.params();
@@ -62,9 +63,8 @@ void SaleSqlManager::addSaleTransaction(const QueryRequest &request, QueryResult
     try {
         //        AbstractSqlManager::enforceArguments( { "action" }, params);
 
-        if (!skipSqlTransaction && !DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(),
-                                    QStringLiteral("Failed to start transation."));
+        if (mode == TransactionMode::UseSqlTransaction)
+            DatabaseUtils::beginTransaction(q);
 
         // STEP: Add client, if client does not exist.
         if (!params.value("customer_phone_number").toString().trimmed().isEmpty() && !params.value("suspended").toBool()) {
@@ -91,23 +91,8 @@ void SaleSqlManager::addSaleTransaction(const QueryRequest &request, QueryResult
 
         // STEP: Insert note, if available.
         if (!params.value("note").toString().trimmed().isEmpty()) {
-            const QList<QSqlRecord> records(callProcedure("AddNote", {
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "note",
-                                                                  params.value("note", QVariant::String)
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "table_name",
-                                                                  QStringLiteral("sale_transaction")
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "user_id",
-                                                                  UserProfile::instance().userId()
-                                                              }
-                                                          }));
+            addNote(params.value("note", QVariant::String).toString(),
+                    QStringLiteral("sale_transaction"));
         }
 
         // STEP: Insert sale transaction.
@@ -195,87 +180,87 @@ void SaleSqlManager::addSaleTransaction(const QueryRequest &request, QueryResult
             // 1. This is a non-suspended transaction.
             // 2. This is a suspended transaction and you want to reserve the goods for this customer.
             if (!params.value("suspended", false).toBool()) {
-                const QList<QSqlRecord> records(callProcedure("DeductStockQuantity", {
-                                                                  ProcedureArgument {
-                                                                      ProcedureArgument::Type::In,
-                                                                      "item_id",
-                                                                      itemInfo.value("item_id")
-                                                                  },
-                                                                  ProcedureArgument {
-                                                                      ProcedureArgument::Type::In,
-                                                                      "quantity",
-                                                                      itemInfo.value("quantity").toDouble()
-                                                                  },
-                                                                  ProcedureArgument {
-                                                                      ProcedureArgument::Type::In,
-                                                                      "unit_id",
-                                                                      itemInfo.value("unit_id")
-                                                                  },
-                                                                  ProcedureArgument {
-                                                                      ProcedureArgument::Type::In,
-                                                                      "reason",
-                                                                      request.command()
-                                                                  },
-                                                                  ProcedureArgument {
-                                                                      ProcedureArgument::Type::In,
-                                                                      "user_id",
-                                                                      UserProfile::instance().userId()
-                                                                  },
-                                                                  ProcedureArgument {
-                                                                      ProcedureArgument::Type::Out,
-                                                                      "initial_quantity_id",
-                                                                      {}
-                                                                  }
-                                                              }));
+                callProcedure("DeductStockQuantity", {
+                                  ProcedureArgument {
+                                      ProcedureArgument::Type::In,
+                                      "item_id",
+                                      itemInfo.value("item_id")
+                                  },
+                                  ProcedureArgument {
+                                      ProcedureArgument::Type::In,
+                                      "quantity",
+                                      itemInfo.value("quantity").toDouble()
+                                  },
+                                  ProcedureArgument {
+                                      ProcedureArgument::Type::In,
+                                      "unit_id",
+                                      itemInfo.value("unit_id")
+                                  },
+                                  ProcedureArgument {
+                                      ProcedureArgument::Type::In,
+                                      "reason",
+                                      request.command()
+                                  },
+                                  ProcedureArgument {
+                                      ProcedureArgument::Type::In,
+                                      "user_id",
+                                      UserProfile::instance().userId()
+                                  },
+                                  ProcedureArgument {
+                                      ProcedureArgument::Type::Out,
+                                      "initial_quantity_id",
+                                      {}
+                                  }
+                              });
             }
 
-            const QList<QSqlRecord> records(callProcedure("AddSaleItem", {
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "sale_transaction_id",
-                                                                  saleTransactionId
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "item_id",
-                                                                  itemInfo.value("item_id")
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "unit_id",
-                                                                  itemInfo.value("unit_id")
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "unit_price",
-                                                                  itemInfo.value("unit_price")
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "quantity",
-                                                                  itemInfo.value("quantity")
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "cost",
-                                                                  itemInfo.value("cost")
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "discount",
-                                                                  itemInfo.value("discount")
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "currency",
-                                                                  QStringLiteral("NGN")
-                                                              },
-                                                              ProcedureArgument {
-                                                                  ProcedureArgument::Type::In,
-                                                                  "user_id",
-                                                                  UserProfile::instance().userId()
-                                                              }
-                                                          }));
+            callProcedure("AddSaleItem", {
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "sale_transaction_id",
+                                  saleTransactionId
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "item_id",
+                                  itemInfo.value("item_id")
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "unit_id",
+                                  itemInfo.value("unit_id")
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "unit_price",
+                                  itemInfo.value("unit_price")
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "quantity",
+                                  itemInfo.value("quantity")
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "cost",
+                                  itemInfo.value("cost")
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "discount",
+                                  itemInfo.value("discount")
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "currency",
+                                  QStringLiteral("NGN")
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "user_id",
+                                  UserProfile::instance().userId()
+                              }
+                          });
         }
 
         // STEP: Insert debt or credit.
@@ -465,18 +450,16 @@ void SaleSqlManager::addSaleTransaction(const QueryRequest &request, QueryResult
                                     });
         }
 
-        if (!skipSqlTransaction && !DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(),
-                                    QStringLiteral("Failed to commit."));
+        if (mode == TransactionMode::UseSqlTransaction)
+            DatabaseUtils::commitTransaction(q);
 
-        QVariantMap outcome;
-        outcome.insert("client_id", clientId);
-        outcome.insert("transaction_id", saleTransactionId);
-
-        result.setOutcome(outcome);
+        result.setOutcome(QVariantMap {
+                              { "client_id", clientId },
+                              { "transaction_id", saleTransactionId }
+                          });
     } catch (DatabaseException &) {
-        if (!skipSqlTransaction && !DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
+        if (mode == TransactionMode::UseSqlTransaction)
+            DatabaseUtils::rollbackTransaction(q);
 
         throw;
     }
@@ -490,8 +473,7 @@ void SaleSqlManager::updateSuspendedTransaction(const QueryRequest &request, Que
     QSqlQuery q(connection);
 
     try {
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
+        DatabaseUtils::beginTransaction(q);
 
         const QList<QSqlRecord> &records(callProcedure("IsSaleTransactionSuspended", {
                                                            ProcedureArgument {
@@ -502,9 +484,9 @@ void SaleSqlManager::updateSuspendedTransaction(const QueryRequest &request, Que
                                                        }));
 
         if (!records.first().value("suspended").toBool())
-            throw DatabaseException(DatabaseException::RRErrorCode::UpdateTransactionFailure, QString(), "Transaction must be suspended.");
+            throw DatabaseException(DatabaseError::QueryErrorCode::UpdateTransactionFailure, QString(), "Transaction must be suspended.");
 
-        addSaleTransaction(request, result, true);
+        addSaleTransaction(request, result, TransactionMode::SkipSqlTransaction);
 
         callProcedure("ArchiveSaleTransaction", {
                           ProcedureArgument {
@@ -519,12 +501,9 @@ void SaleSqlManager::updateSuspendedTransaction(const QueryRequest &request, Que
                           }
                       });
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
+        DatabaseUtils::commitTransaction(q);
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -554,21 +533,14 @@ void SaleSqlManager::viewSaleCart(const QueryRequest &request, QueryResult &resu
                                                           }
                                                       }));
 
-        QVariantMap outcome;
         QVariantList items;
-        for (const QSqlRecord &record : records) {
+        for (const QSqlRecord &record : records)
             items.append(recordToMap(record));
-        }
 
         if (!items.isEmpty()) {
-            outcome.insert("transaction_id", params.value("transaction_id"));
-            outcome.insert("client_id", items.first().toMap().value("client_id"));
-            outcome.insert("customer_name", items.first().toMap().value("customer_name"));
-            outcome.insert("customer_phone_number", items.first().toMap().value("customer_phone_number"));
-            outcome.insert("total_cost", items.first().toMap().value("total_cost"));
+            QVariantMap outcome { items.first().toMap() };
             outcome.insert("items", items);
             outcome.insert("record_count", items.count());
-
             result.setOutcome(outcome);
         }
     } catch (DatabaseException &) {
@@ -587,8 +559,7 @@ void SaleSqlManager::undoAddSaleTransaction(const QueryRequest &request, QueryRe
     try {
         enforceArguments({ "transaction_id" }, params);
 
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
+        DatabaseUtils::beginTransaction(q);
 
         if (params.value("transaction_id").toInt() > 0) {
             callProcedure("ArchiveSaleTransaction", {
@@ -669,14 +640,11 @@ void SaleSqlManager::undoAddSaleTransaction(const QueryRequest &request, QueryRe
                           });
         }
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
+        DatabaseUtils::commitTransaction(q);
 
         result.setOutcome(request.params());
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -716,7 +684,10 @@ void SaleSqlManager::viewSaleTransactions(const QueryRequest &request, QueryResu
             transactions.append(recordToMap(record));
         }
 
-        result.setOutcome(QVariantMap { { "transactions", transactions }, { "record_count", transactions.count() } });
+        result.setOutcome(QVariantMap {
+                              { "transactions", transactions },
+                              { "record_count", transactions.count() }
+                          });
     } catch (DatabaseException &) {
         throw;
     }
@@ -754,7 +725,10 @@ void SaleSqlManager::viewSaleTransactionItems(const QueryRequest &request, Query
             items.append(recordToMap(record));
         }
 
-        result.setOutcome(QVariantMap { { "items", items }, { "record_count", items.count() } });
+        result.setOutcome(QVariantMap {
+                              { "items", items },
+                              { "record_count", items.count() }
+                          });
     } catch (DatabaseException &) {
         throw;
     }
@@ -880,8 +854,9 @@ void SaleSqlManager::viewSaleReport(const QueryRequest &request, QueryResult &re
             items.append(recordToMap(record));
         }
 
-        result.setOutcome(QVariantMap { { "items", items },
-                                        { "record_count", items.count() },
+        result.setOutcome(QVariantMap {
+                              { "items", items },
+                              { "record_count", items.count() },
                           });
     } catch (DatabaseException &) {
         throw;

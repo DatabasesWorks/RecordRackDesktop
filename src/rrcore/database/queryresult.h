@@ -34,6 +34,8 @@ public:
     void setOutcome(const QVariant &outcome);
     QVariant outcome() const;
 
+    static QueryResult fromJson(const QByteArray &json, const QueryRequest &request = QueryRequest());
+
     friend QDebug operator<<(QDebug debug, const QueryResult &result)
     {
         debug.nospace() << "QueryResult(command=" << result.request().command()
@@ -41,7 +43,8 @@ public:
                         << ", errorCode=" << result.errorCode()
                         << ", errorMessage=" << (result.errorMessage().isEmpty() ? result.errorUserMessage() : result.errorMessage())
                         << ", recordCount=" << result.outcome().toMap().value("record_count").toInt()
-                        << ", outcomeValid=" << result.outcome().isValid() << ") ";
+                        << ", outcomeValid=" << result.outcome().isValid()
+                        << ")";
 
         return debug;
     }

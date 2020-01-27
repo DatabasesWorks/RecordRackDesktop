@@ -1,13 +1,12 @@
 #include "queryresult.h"
 
+#include <QJsonObject>
+#include <QJsonDocument>
+
 QueryResult::QueryResult(QObject *parent) :
     QObject(parent),
-    m_request(QueryRequest()),
     m_successful(false),
-    m_errorCode(-1),
-    m_errorMessage(QString()),
-    m_errorUserMessage(QString()),
-    m_outcome(QVariant())
+    m_errorCode(-1)
 {
     qRegisterMetaType<QueryResult>("QueryResult");
 }
@@ -16,11 +15,9 @@ QueryResult::QueryResult(const QueryRequest &request) :
     QObject(nullptr),
     m_request(request),
     m_successful(false),
-    m_errorCode(-1),
-    m_errorMessage(QString()),
-    m_errorUserMessage(QString()),
-    m_outcome(QVariant())
+    m_errorCode(-1)
 {
+    qRegisterMetaType<QueryResult>("QueryResult");
 }
 
 QueryResult::QueryResult(const QueryResult &other) :
@@ -104,4 +101,19 @@ void QueryResult::setOutcome(const QVariant &outcome)
 QVariant QueryResult::outcome() const
 {
     return m_outcome;
+}
+
+QueryResult QueryResult::fromJson(const QByteArray &json, const QueryRequest &request)
+{
+    QJsonObject jsonObject{ QJsonDocument::fromJson(json).object() };
+    QueryResult result;
+    result.setSuccessful(jsonObject.value("successful").toBool());
+    result.setOutcome(jsonObject.value("outcome").toObject().toVariantMap());
+    result.setErrorMessage(jsonObject.value("error").toObject().value("message").toString());
+    result.setRequest(request);
+    if (jsonObject.value("error").toObject().contains("errno")
+            && jsonObject.value("error").toObject().value("errno").isDouble())
+        result.setErrorCode(jsonObject.value("error").toObject().value("errno").toInt());
+
+    return result;
 }

@@ -1,15 +1,13 @@
 #include "qmlincomereportmodel.h"
-
-const int COLUMN_COUNT = 4;
+#include "database/databasethread.h"
+#include "queryexecutors/income.h"
 
 QMLIncomeReportModel::QMLIncomeReportModel(QObject *parent) :
-    AbstractVisualTableModel (parent)
-{
+    QMLIncomeReportModel(DatabaseThread::instance(), parent)
+{}
 
-}
-
-QMLIncomeReportModel::QMLIncomeReportModel(DatabaseThread &thread) :
-    AbstractVisualTableModel (thread)
+QMLIncomeReportModel::QMLIncomeReportModel(DatabaseThread &thread, QObject *parent) :
+    AbstractVisualTableModel(thread, parent)
 {
 
 }
@@ -27,7 +25,7 @@ int QMLIncomeReportModel::columnCount(const QModelIndex &index) const
     if (index.isValid())
         return 0;
 
-    return COLUMN_COUNT;
+    return ColumnCount;
 }
 
 QVariant QMLIncomeReportModel::data(const QModelIndex &index, int role) const
@@ -53,12 +51,40 @@ QHash<int, QByteArray> QMLIncomeReportModel::roleNames() const
     };
 }
 
+QVariant QMLIncomeReportModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if (orientation == Qt::Horizontal) {
+        if (role == Qt::DisplayRole) {
+            switch (section) {
+            case PurposeColumn:
+                return tr("Purpose");
+            case AmountColumn:
+                return tr("Amount");
+            }
+        } else if (role == Qt::TextAlignmentRole) {
+            switch (section) {
+            case PurposeColumn:
+                return Qt::AlignLeft;
+            case AmountColumn:
+                return Qt::AlignRight;
+            }
+        } else if (role == Qt::SizeHintRole) {
+            switch (section) {
+            case PurposeColumn:
+                return tableViewWidth() - 200;
+            case AmountColumn:
+                return 200;
+            }
+        }
+    }
+
+    return section + 1;
+}
+
 void QMLIncomeReportModel::tryQuery()
 {
     setBusy(true);
-    QueryRequest request(this);
-    request.setCommand("view_income_report", { }, QueryRequest::Income);
-    emit executeRequest(request);
+    emit execute(new IncomeQuery::ViewIncomeReport(this));
 }
 
 void QMLIncomeReportModel::processResult(const QueryResult result)
@@ -68,13 +94,13 @@ void QMLIncomeReportModel::processResult(const QueryResult result)
 
     setBusy(false);
     if (result.isSuccessful()) {
-        if (result.request().command() == "view_income_report") {
+        if (result.request().command() == IncomeQuery::ViewIncomeReport::COMMAND) {
             beginResetModel();
             m_records = result.outcome().toMap().value("transactions").toList();
             endResetModel();
             emit success(ViewIncomeReportSuccess);
         } else {
-            emit success();
+            emit error();
         }
     } else {
 

@@ -3,21 +3,19 @@
 #include <QDebug>
 
 #include "database/databasethread.h"
+#include "queryexecutors/dashboard.h"
 
 QMLDashboardHomeModel::QMLDashboardHomeModel(QObject *parent)
-    : AbstractHomeModel(parent)
-{
-}
+    : QMLDashboardHomeModel(DatabaseThread::instance(), parent)
+{}
 
-QMLDashboardHomeModel::QMLDashboardHomeModel(DatabaseThread &thread)
-    : AbstractHomeModel(thread)
+QMLDashboardHomeModel::QMLDashboardHomeModel(DatabaseThread &thread, QObject *parent)
+    : AbstractHomeModel(thread, parent)
 {
 }
 
 void QMLDashboardHomeModel::tryQuery()
 {
     setBusy(true);
-    QueryRequest request(this);
-    request.setCommand("view_dashboard", { }, QueryRequest::Dashboard);
-    emit executeRequest(request);
+    emit execute(new DashboardQuery::ViewDashboard(this));
 }

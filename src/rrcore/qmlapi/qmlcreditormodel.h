@@ -1,7 +1,7 @@
 #ifndef QMLCREDITORMODEL_H
 #define QMLCREDITORMODEL_H
 
-#include "models/abstracttransactionitemmodel.h"
+#include "models/abstractvisuallistmodel.h"
 
 class QMLCreditorModel : public AbstractVisualListModel
 {
@@ -36,7 +36,7 @@ public:
     }; Q_ENUM(FilterColumn)
 
     explicit QMLCreditorModel(QObject *parent = nullptr);
-    explicit QMLCreditorModel(DatabaseThread &thread);
+    explicit QMLCreditorModel(DatabaseThread &thread, QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override final;

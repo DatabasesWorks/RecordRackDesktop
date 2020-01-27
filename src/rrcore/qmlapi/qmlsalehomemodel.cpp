@@ -1,18 +1,18 @@
 #include "qmlsalehomemodel.h"
 #include "database/queryrequest.h"
 #include "database/queryresult.h"
+#include "database/databasethread.h"
 
 #include "models/saletotalrevenuemodel.h"
 #include "models/salemostsolditemmodel.h"
+#include "queryexecutors/sales.h"
 
 QMLSaleHomeModel::QMLSaleHomeModel(QObject *parent) :
-    AbstractVisualListModel(parent)
-{
+    QMLSaleHomeModel(DatabaseThread::instance(), parent)
+{}
 
-}
-
-QMLSaleHomeModel::QMLSaleHomeModel(DatabaseThread &thread) :
-    AbstractVisualListModel(thread)
+QMLSaleHomeModel::QMLSaleHomeModel(DatabaseThread &thread, QObject *parent) :
+    AbstractVisualListModel(thread, parent)
 {
 
 }
@@ -53,11 +53,7 @@ QHash<int, QByteArray> QMLSaleHomeModel::roleNames() const
 void QMLSaleHomeModel::tryQuery()
 {
     setBusy(true);
-
-    QueryRequest request(this);
-    request.setCommand("view_sale_home", QVariantMap(), QueryRequest::Sales);
-
-    emit executeRequest(request);
+    emit execute(new SaleQuery::ViewSaleHome(this));
 }
 
 void QMLSaleHomeModel::processResult(const QueryResult result)

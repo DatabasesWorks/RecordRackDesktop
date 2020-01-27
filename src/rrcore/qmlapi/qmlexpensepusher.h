@@ -25,7 +25,7 @@ public:
     }; Q_ENUM(ErrorCode)
 
     explicit QMLExpensePusher(QObject *parent = nullptr);
-    explicit QMLExpensePusher(DatabaseThread &thread);
+    explicit QMLExpensePusher(DatabaseThread &thread, QObject *parent = nullptr);
 
     QString clientName() const;
     void setClientName(const QString &clientName);
@@ -52,6 +52,8 @@ private:
     QString m_purpose;
     qreal m_amount;
     PaymentMethod m_paymentMethod;
+
+    QString paymentMethodAsString() const;
 };
 
 #endif // QMLEXPENSEPUSHER_H

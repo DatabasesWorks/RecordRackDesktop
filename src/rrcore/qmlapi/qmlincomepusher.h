@@ -15,17 +15,17 @@ public:
         Cash, DebitCard, CreditCard
     }; Q_ENUM(PaymentMethod)
 
-    enum class SuccessCode {
+    enum SuccessCode {
         AddIncomeSuccess,
         UpdateIncomeSuccess
     }; Q_ENUM(SuccessCode)
 
-    enum class ErrorCode {
+    enum ErrorCode {
         AddIncomeError
     }; Q_ENUM(ErrorCode)
 
     explicit QMLIncomePusher(QObject *parent = nullptr);
-    explicit QMLIncomePusher(DatabaseThread &thread);
+    explicit QMLIncomePusher(DatabaseThread &thread, QObject *parent = nullptr);
 
     QString clientName() const;
     void setClientName(const QString &clientName);
@@ -52,6 +52,8 @@ private:
     QString m_purpose;
     qreal m_amount;
     PaymentMethod m_paymentMethod;
+
+    QString paymentMethodAsString() const;
 };
 
 #endif // QMLINCOMEPUSHER_H

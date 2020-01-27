@@ -1,15 +1,13 @@
 #include "qmlpurchasereportmodel.h"
-
-const int COLUMN_COUNT = 5;
+#include "database/databasethread.h"
+#include "queryexecutors/purchase.h"
 
 QMLPurchaseReportModel::QMLPurchaseReportModel(QObject *parent) :
-    AbstractVisualTableModel (parent)
-{
+    QMLPurchaseReportModel(DatabaseThread::instance(), parent)
+{}
 
-}
-
-QMLPurchaseReportModel::QMLPurchaseReportModel(DatabaseThread &thread) :
-    AbstractVisualTableModel (thread)
+QMLPurchaseReportModel::QMLPurchaseReportModel(DatabaseThread &thread, QObject *parent) :
+    AbstractVisualTableModel(thread, parent)
 {
 
 }
@@ -48,7 +46,7 @@ int QMLPurchaseReportModel::columnCount(const QModelIndex &parent) const
     if (parent.isValid())
         return 0;
 
-    return COLUMN_COUNT;
+    return ColumnCount;
 }
 
 QHash<int, QByteArray> QMLPurchaseReportModel::roleNames() const
@@ -62,12 +60,50 @@ QHash<int, QByteArray> QMLPurchaseReportModel::roleNames() const
     };
 }
 
+QVariant QMLPurchaseReportModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if (orientation == Qt::Horizontal) {
+        if (role == Qt::DisplayRole) {
+            switch (section) {
+            case CategoryColumn:
+                return tr("Category");
+            case ItemColumn:
+                return tr("Item");
+            case QuantityBoughtColumn:
+                return tr("Qty bought");
+            case TotalAmountColumn:
+                return tr("Total amount");
+            }
+        } else if (role == Qt::TextAlignmentRole) {
+            switch (section) {
+            case CategoryColumn:
+            case ItemColumn:
+                return Qt::AlignLeft;
+            case QuantityBoughtColumn:
+            case TotalAmountColumn:
+                return Qt::AlignRight;
+            }
+        } else if (role == Qt::SizeHintRole) {
+            switch (section) {
+            case CategoryColumn:
+                return 180;
+            case ItemColumn:
+                return tableViewWidth() - 180 - 180 - 180;
+            case QuantityBoughtColumn:
+                return 180;
+            case TotalAmountColumn:
+                return 180;
+            }
+        }
+    }
+
+    return section + 1;
+}
+
 void QMLPurchaseReportModel::tryQuery()
 {
     setBusy(true);
-    QueryRequest request(this);
-    request.setCommand("view_purchase_report", { }, QueryRequest::Purchase);
-    emit executeRequest(request);
+    emit execute(new PurchaseQuery::ViewPurchaseReport(this));
 }
 
 void QMLPurchaseReportModel::processResult(const QueryResult result)
@@ -77,13 +113,13 @@ void QMLPurchaseReportModel::processResult(const QueryResult result)
 
     setBusy(false);
     if (result.isSuccessful()) {
-        if (result.request().command() == "view_purchase_report") {
+        if (result.request().command() == PurchaseQuery::ViewPurchaseReport::COMMAND) {
             beginResetModel();
             m_records = result.outcome().toMap().value("items").toList();
             endResetModel();
             emit success(ViewPurchaseReportSuccess);
         } else {
-            emit success();
+            emit error();
         }
     } else {
 

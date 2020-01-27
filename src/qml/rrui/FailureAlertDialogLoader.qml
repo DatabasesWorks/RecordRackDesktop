@@ -9,11 +9,11 @@ Loader {
     property string message: ""
 
     active: false
-    x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
+    x: (MainWindow.width - width) / 2
+    y: (MainWindow.height - height) / 2
 
     sourceComponent: FluidControls.AlertDialog {
-        parent: failureAlertDialogLoader.parent
+        parent: MainWindow.contentItem
         text: failureAlertDialogLoader.title
         standardButtons: QQC2.Dialog.Ok
         closePolicy: QQC2.Popup.CloseOnEscape

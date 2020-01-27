@@ -7,6 +7,7 @@ SalePaymentModel::SalePaymentModel(QObject *parent) :
     m_cashPaymentCount(0),
     m_cardPaymentCount(0)
 {
+    qRegisterMetaType<SalePaymentModel*>();
 }
 
 SalePaymentModel::~SalePaymentModel()
@@ -29,11 +30,11 @@ QVariant SalePaymentModel::data(const QModelIndex &index, int role) const
 
     switch (role) {
     case AmountRole:
-        return m_salePayments.at(index.row())->amount;
+        return m_salePayments.at(index.row()).amount;
     case MethodRole:
-        return static_cast<int>(m_salePayments.at(index.row())->method);
+        return static_cast<int>(m_salePayments.at(index.row()).method);
     case NoteRole:
-        return m_salePayments.at(index.row())->note;
+        return m_salePayments.at(index.row()).note;
     }
 
     return QVariant();
@@ -41,15 +42,14 @@ QVariant SalePaymentModel::data(const QModelIndex &index, int role) const
 
 QHash<int, QByteArray> SalePaymentModel::roleNames() const
 {
-    QHash<int, QByteArray> roles(AbstractVisualListModel::roleNames());
-    roles.insert(AmountRole, "amount");
-    roles.insert(MethodRole, "method");
-    roles.insert(NoteRole, "note");
-
-    return roles;
+    return {
+        { AmountRole, "amount" },
+        { MethodRole, "method" },
+        { NoteRole, "note" }
+    };
 }
 
-void SalePaymentModel::addPayment(SalePayment *payment)
+void SalePaymentModel::addPayment(SalePayment payment)
 {
     beginInsertRows(QModelIndex(), rowCount(), rowCount());
     m_salePayments.append(payment);
@@ -94,8 +94,8 @@ void SalePaymentModel::calculatePaymentCount()
     m_cashPaymentCount = 0;
     m_cardPaymentCount = 0;
 
-    for (const SalePayment *payment : m_salePayments) {
-        if (payment->method == SalePayment::PaymentMethod::Cash)
+    for (const SalePayment &payment : m_salePayments) {
+        if (payment.method == SalePayment::PaymentMethod::Cash)
             m_cashPaymentCount++;
         else
             m_cardPaymentCount++;

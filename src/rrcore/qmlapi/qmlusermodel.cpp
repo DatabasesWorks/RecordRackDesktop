@@ -1,15 +1,14 @@
 #include "qmlusermodel.h"
-
-const int COLUMN_COUNT = 5;
+#include "database/databasethread.h"
+#include "models/abstractvisualtablemodel.h"
+#include "queryexecutors/user.h"
 
 QMLUserModel::QMLUserModel(QObject *parent) :
-    AbstractVisualTableModel (parent)
-{
+    QMLUserModel(DatabaseThread::instance(), parent)
+{}
 
-}
-
-QMLUserModel::QMLUserModel(DatabaseThread &thread) :
-    AbstractVisualTableModel (thread)
+QMLUserModel::QMLUserModel(DatabaseThread &thread, QObject *parent) :
+    AbstractVisualTableModel(thread, parent)
 {
 
 }
@@ -41,7 +40,7 @@ int QMLUserModel::columnCount(const QModelIndex &parent) const
     if (parent.isValid())
         return 0;
 
-    return COLUMN_COUNT;
+    return ColumnCount;
 }
 
 QVariant QMLUserModel::data(const QModelIndex &index, int role) const
@@ -73,11 +72,50 @@ QHash<int, QByteArray> QMLUserModel::roleNames() const
     };
 }
 
+QVariant QMLUserModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if (orientation == Qt::Horizontal) {
+        if (role == Qt::DisplayRole) {
+            switch (section) {
+            case UserColumn:
+                return tr("User");
+            case ActiveColumn:
+                return tr("Active");
+            case PresetColumn:
+                return tr("Preset");
+            case ActionColumn:
+                return tr("Action");
+            }
+        } else if (role == Qt::TextAlignmentRole) {
+            switch (section) {
+            case UserColumn:
+            case ActiveColumn:
+            case PresetColumn:
+                return Qt::AlignLeft;
+            case ActionColumn:
+                return Qt::AlignHCenter;
+            }
+        } else if (role == Qt::SizeHintRole) {
+            switch (section) {
+            case UserColumn:
+                return tableViewWidth() - 100 - 100 - 130;
+            case ActiveColumn:
+                return 100;
+            case PresetColumn:
+                return 100;
+            case ActionColumn:
+                return 130;
+            }
+        }
+    }
+
+    return section + 1;
+}
+
 void QMLUserModel::tryQuery()
 {
-    QueryRequest request(this);
-    request.setCommand("view_users", { }, QueryRequest::User);
-    emit executeRequest(request);
+    setBusy(true);
+    emit execute(new UserQuery::ViewUsers(false, this));
 }
 
 void QMLUserModel::processResult(const QueryResult result)
@@ -91,7 +129,7 @@ void QMLUserModel::processResult(const QueryResult result)
             emit success(ActivateUserSuccess);
         } else {
             beginResetModel();
-            if (result.request().command() == "view_users") {
+            if (result.request().command() == UserQuery::ViewUsers::COMMAND) {
                 m_records = result.outcome().toMap().value("users").toList();
                 emit success(ViewUsersSuccess);
             } else if (result.request().command() == "remove_user") {
@@ -123,17 +161,13 @@ void QMLUserModel::removeUserFromModel(const QString &userName)
 void QMLUserModel::removeUser(const QString &userName)
 {
     setBusy(true);
-
-    QueryRequest request(this);
-    request.setCommand("remove_user", { { "user_name", userName } }, QueryRequest::User);
-    emit executeRequest(request);
+    emit execute(new UserQuery::RemoveUser(userName, this));
 }
 
 void QMLUserModel::activateUser(const QString &userName, bool active)
 {
     setBusy(true);
-
-    QueryRequest request(this);
-    request.setCommand("activate_user", { { "user_name", userName }, { "active", active } }, QueryRequest::User);
-    emit executeRequest(request);
+    emit execute(new UserQuery::ActivateUser(userName,
+                                             active,
+                                             this));
 }

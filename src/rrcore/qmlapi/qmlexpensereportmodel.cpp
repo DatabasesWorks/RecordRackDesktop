@@ -1,15 +1,13 @@
 #include "qmlexpensereportmodel.h"
-
-const int COLUMN_COUNT = 4;
+#include "database/databasethread.h"
+#include "queryexecutors/expense.h"
 
 QMLExpenseReportModel::QMLExpenseReportModel(QObject *parent) :
-    AbstractVisualTableModel (parent)
-{
+    QMLExpenseReportModel(DatabaseThread::instance(), parent)
+{}
 
-}
-
-QMLExpenseReportModel::QMLExpenseReportModel(DatabaseThread &thread) :
-    AbstractVisualTableModel (thread)
+QMLExpenseReportModel::QMLExpenseReportModel(DatabaseThread &thread, QObject *parent) :
+    AbstractVisualTableModel(thread, parent)
 {
 
 }
@@ -27,7 +25,7 @@ int QMLExpenseReportModel::columnCount(const QModelIndex &index) const
     if (index.isValid())
         return 0;
 
-    return COLUMN_COUNT;
+    return ColumnCount;
 }
 
 QVariant QMLExpenseReportModel::data(const QModelIndex &index, int role) const
@@ -53,12 +51,40 @@ QHash<int, QByteArray> QMLExpenseReportModel::roleNames() const
     };
 }
 
+QVariant QMLExpenseReportModel::headerData(int section, Qt::Orientation orientation, int role) const
+{
+    if (orientation == Qt::Horizontal) {
+        if (role == Qt::DisplayRole) {
+            switch (section) {
+            case PurposeColumn:
+                return tr("Purpose");
+            case AmountColumn:
+                return tr("Amount");
+            }
+        } else if (role == Qt::TextAlignmentRole) {
+            switch (section) {
+            case PurposeColumn:
+                return Qt::AlignLeft;
+            case AmountColumn:
+                return Qt::AlignRight;
+            }
+        } else if (role == Qt::SizeHintRole) {
+            switch (section) {
+            case PurposeColumn:
+                return tableViewWidth() - 200;
+            case AmountColumn:
+                return 200;
+            }
+        }
+    }
+
+    return section + 1;
+}
+
 void QMLExpenseReportModel::tryQuery()
 {
     setBusy(true);
-    QueryRequest request(this);
-    request.setCommand("view_expense_report", { }, QueryRequest::Expense);
-    emit executeRequest(request);
+    emit execute(new ExpenseQuery::ViewExpenseReport(this));
 }
 
 void QMLExpenseReportModel::processResult(const QueryResult result)
@@ -68,13 +94,13 @@ void QMLExpenseReportModel::processResult(const QueryResult result)
 
     setBusy(false);
     if (result.isSuccessful()) {
-        if (result.request().command() == "view_expense_report") {
+        if (result.request().command() == ExpenseQuery::ViewExpenseReport::COMMAND) {
             beginResetModel();
             m_records = result.outcome().toMap().value("transactions").toList();
             endResetModel();
             emit success(ViewExpenseReportSuccess);
         } else {
-            emit success();
+            emit error();
         }
     } else {
 

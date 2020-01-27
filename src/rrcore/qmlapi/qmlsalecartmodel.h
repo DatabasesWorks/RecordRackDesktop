@@ -5,8 +5,8 @@
 #include <QDateTime>
 
 #include "models/abstractvisuallistmodel.h"
+#include "utility/saleutils.h"
 
-class SalePayment;
 class SalePaymentModel;
 
 class QMLSaleCartModel : public AbstractVisualListModel
@@ -25,8 +25,8 @@ class QMLSaleCartModel : public AbstractVisualListModel
     Q_PROPERTY(SalePaymentModel *paymentModel READ paymentModel NOTIFY paymentModelChanged)
 public:
     explicit QMLSaleCartModel(QObject *parent = nullptr);
-    explicit QMLSaleCartModel(DatabaseThread &thread);
-    ~QMLSaleCartModel() override;
+    explicit QMLSaleCartModel(DatabaseThread &thread, QObject *parent = nullptr);
+    ~QMLSaleCartModel() override = default;
 
     enum Roles {
         CategoryIdRole = Qt::UserRole,
@@ -53,7 +53,8 @@ public:
         UnknownSuccess,
         RetrieveTransactionSuccess,
         SuspendTransactionSuccess,
-        SubmitTransactionSuccess
+        SubmitTransactionSuccess,
+        UndoSubmitTransactionSuccess
     }; Q_ENUM(SuccessCode)
 
     enum ErrorCode {
@@ -62,6 +63,7 @@ public:
         SuspendTransactionError,
         RetrieveTransactionError,
         SubmitTransactionError,
+        UndoSubmitTransactionError,
         EmptyCartError,
         NoDueDateSetError
     }; Q_ENUM(ErrorCode)
@@ -69,6 +71,8 @@ public:
     int rowCount(const QModelIndex &parent = QModelIndex()) const override final;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override final;
     QHash<int, QByteArray> roleNames() const override final;
+
+    bool isExistingTransaction() const;
 
     qint64 transactionId() const;
     void setTransactionId(qint64 transactionId);
@@ -93,7 +97,7 @@ public:
 
     SalePaymentModel *paymentModel() const;
 
-    QList<SalePayment *> payments() const;
+    QList<SalePayment> payments() const;
 
     Q_INVOKABLE void addPayment(double amount, PaymentMethod method, const QString &note = QString());
     Q_INVOKABLE void removePayment(int index);
@@ -105,6 +109,7 @@ public:
 protected:
     void tryQuery() override final;
     void processResult(const QueryResult result) override final;
+    void undoLastCommit() override;
 signals:
     void transactionIdChanged();
     void customerNameChanged();
@@ -135,7 +140,7 @@ private:
     bool m_canAcceptCash;
     bool m_canAcceptCard;
     QVariantList m_records;
-    QList<SalePayment *> m_salePayments;
+    SalePaymentList m_salePayments;
     SalePaymentModel *m_paymentModel;
 
     bool containsItem(int itemId);

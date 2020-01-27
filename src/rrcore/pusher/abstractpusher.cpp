@@ -3,29 +3,24 @@
 #include "database/databasethread.h"
 #include "database/queryrequest.h"
 #include "database/queryresult.h"
+#include "database/queryexecutor.h"
+
+#include <QLoggingCategory>
+
+Q_LOGGING_CATEGORY(abstractPusher, "rrcore.database.abstractpusher");
 
 AbstractPusher::AbstractPusher(QObject *parent) :
+    AbstractPusher(DatabaseThread::instance(), parent)
+{}
+
+AbstractPusher::AbstractPusher(DatabaseThread &thread, QObject *parent) :
     QObject(parent),
     m_busy(false)
 {
-    connect(this, &AbstractPusher::executeRequest, &DatabaseThread::instance(), &DatabaseThread::execute);
-    connect(&DatabaseThread::instance(), &DatabaseThread::resultReady, this, &AbstractPusher::processResult);
+    connect(this, &AbstractPusher::execute, &thread, &DatabaseThread::execute);
 
-    connect(&DatabaseThread::instance(), &DatabaseThread::resultReady, this, &AbstractPusher::saveRequest);
-}
-
-AbstractPusher::AbstractPusher(DatabaseThread &thread) :
-    m_busy(false)
-{
-    connect(this, &AbstractPusher::executeRequest, &thread, &DatabaseThread::execute);
     connect(&thread, &DatabaseThread::resultReady, this, &AbstractPusher::processResult);
-
     connect(&thread, &DatabaseThread::resultReady, this, &AbstractPusher::saveRequest);
-}
-
-AbstractPusher::~AbstractPusher()
-{
-
 }
 
 bool AbstractPusher::isBusy() const
@@ -42,39 +37,24 @@ void AbstractPusher::setBusy(bool busy)
     emit busyChanged();
 }
 
+const QueryRequest &AbstractPusher::lastSuccessfulRequest() const
+{
+    return m_lastSuccessfulRequest;
+}
+
 void AbstractPusher::undoLastCommit()
 {
-    setBusy(true);
-    QueryRequest request(m_lastRequest);
-
-    request.setCommand(QString("undo_") + request.command(), request.params(), request.type());
-    emit executeRequest(request);
 }
 
 void AbstractPusher::saveRequest(const QueryResult &result)
 {
-    if (result.isSuccessful() && result.request().receiver() == this) {
-        if (result.request().params().value("can_undo").toBool() && !result.request().command().startsWith("undo_")) {
-            QueryRequest request(result.request());
-
-            QVariantMap params = request.params();
-            params.insert("outcome", result.outcome());
-            params.remove("can_undo");
-
-            request.setCommand(request.command(), params, request.type());
-            m_lastRequest = request;
-        } else {
-            m_lastRequest = QueryRequest();
-        }
+    if (result.isSuccessful() && result.request().receiver() == this
+            && result.request().canUndo()
+            && !result.request().isUndoSet()) {
+        m_lastSuccessfulRequest = result.request();
+        QVariantMap params{ result.request().params() };
+        params.insert("outcome", result.outcome());
+        m_lastSuccessfulRequest.setParams(params);
+        qCDebug(abstractPusher) << "Request saved:" << result.request().command() << this;
     }
-}
-
-void AbstractPusher::setLastRequest(const QueryRequest &lastRequest)
-{
-    m_lastRequest = lastRequest;
-}
-
-QueryRequest AbstractPusher::lastRequest() const
-{
-    return m_lastRequest;
 }

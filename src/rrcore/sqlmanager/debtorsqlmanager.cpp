@@ -4,7 +4,7 @@
 #include <QSqlError>
 #include <QDateTime>
 
-#include "singletons/userprofile.h"
+#include "user/userprofile.h"
 
 DebtorSqlManager::DebtorSqlManager(const QString &connectionName) :
     AbstractSqlManager(connectionName)
@@ -34,7 +34,8 @@ QueryResult DebtorSqlManager::execute(const QueryRequest &request)
         else if (request.command() == "view_debtor_details")
             viewDebtorDetails(request, result);
         else
-            throw DatabaseException(DatabaseException::RRErrorCode::CommandNotFound, QString("Command not found: %1").arg(request.command()));
+            throw DatabaseException(DatabaseError::QueryErrorCode::CommandNotFound,
+                                    QString("Command not found: %1").arg(request.command()));
 
         result.setSuccessful(true);
     } catch (DatabaseException &e) {
@@ -63,12 +64,11 @@ void DebtorSqlManager::addNewDebtor(const QueryRequest &request, QueryResult &re
     try {
         AbstractSqlManager::enforceArguments({ "preferred_name", "primary_phone_number" }, params);
 
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
+        DatabaseUtils::beginTransaction(q);
 
         // STEP: Check if debt transactions exist
         if (newDebtTransactions.count() == 0)
-            throw DatabaseException(DatabaseException::RRErrorCode::MissingArguments, q.lastError().text(),
+            throw DatabaseException(DatabaseError::QueryErrorCode::MissingArguments, q.lastError().text(),
                                     QString("No new debt transactions for debtor %1.").arg(params.value("preferred_name").toString()));
 
         // STEP: Ensure that debtor doesn't already exist
@@ -82,7 +82,7 @@ void DebtorSqlManager::addNewDebtor(const QueryRequest &request, QueryResult &re
                                                           }));
 
             if (records.first().value("id").toBool())
-                throw DatabaseException(DatabaseException::RRErrorCode::DuplicateEntryFailure, q.lastError().text(),
+                throw DatabaseException(DatabaseError::QueryErrorCode::DuplicateEntryFailure, q.lastError().text(),
                                         "Failed to insert debtor because debtor already exists.");
         }
 
@@ -95,7 +95,7 @@ void DebtorSqlManager::addNewDebtor(const QueryRequest &request, QueryResult &re
         }
 
         if (newDebtTransactions.count() != debtTransactionNoteIds.count())
-            throw DatabaseException(DatabaseException::RRErrorCode::AddDebtorFailure, "",
+            throw DatabaseException(DatabaseError::QueryErrorCode::AddDebtorFailure, "",
                                     "Failed to match note ID count with transaction count.");
 
         // STEP: Add client
@@ -181,7 +181,7 @@ void DebtorSqlManager::addNewDebtor(const QueryRequest &request, QueryResult &re
                               ProcedureArgument {
                                   ProcedureArgument::Type::In,
                                   "note_id",
-                                  debtTransactionNoteIds.at(i) == 0 ? QVariant(QVariant::Int) : debtTransactionNoteIds.at(i)
+                                  debtTransactionNoteIds.at(i) == 0 ? debtTransactionNoteIds.at(i) : QVariant(QVariant::Int)
                               },
                               ProcedureArgument {
                                   ProcedureArgument::Type::In,
@@ -197,7 +197,7 @@ void DebtorSqlManager::addNewDebtor(const QueryRequest &request, QueryResult &re
             double newDebt = totalDebt;
 
             if (dueDateTime <= QDateTime::currentDateTime())
-                throw DatabaseException(DatabaseException::RRErrorCode::InvalidDueDate, q.lastError().text(),
+                throw DatabaseException(DatabaseError::QueryErrorCode::InvalidDueDate, q.lastError().text(),
                                         QStringLiteral("Due date is earlier than the current date."));
 
             debtTransactionIds.append(debtTransactionId);
@@ -254,23 +254,20 @@ void DebtorSqlManager::addNewDebtor(const QueryRequest &request, QueryResult &re
 
                 newDebt -= amountPaid;
                 if (newDebt < 0.0)
-                    throw DatabaseException(DatabaseException::RRErrorCode::AmountOverpaid, q.lastError().text(),
+                    throw DatabaseException(DatabaseError::QueryErrorCode::AmountOverpaid, q.lastError().text(),
                                             QStringLiteral("Total amount paid is greater than total debt."));
             }
         }
 
-        QVariantMap outcome;
-        outcome.insert("client_id", clientId);
-        outcome.insert("debtor_id", debtorId);
-        outcome.insert("debt_transaction_ids", debtTransactionIds);
-        result.setOutcome(outcome);
+        result.setOutcome(QVariantMap {
+                              { "client_id", clientId },
+                              { "debtor_id", debtorId },
+                              { "debt_transaction_ids", debtTransactionIds }
+                          });
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
+        DatabaseUtils::commitTransaction(q);
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -289,51 +286,55 @@ void DebtorSqlManager::undoAddNewDebtor(const QueryRequest &request, QueryResult
     try {
         AbstractSqlManager::enforceArguments({ "client_id", "debtor_id", "debt_transaction_ids" }, params.value("outcome").toMap());
 
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
+        DatabaseUtils::beginTransaction(q);
 
         // Remove debtor
-        q.prepare("UPDATE debtor SET archived = 1, last_edited = :last_edited, user_id = :user_id WHERE id = :debtor_id");
-        q.bindValue(":last_edited", currentDateTime);
-        q.bindValue(":user_id", UserProfile::instance().userId());
-        q.bindValue(":debtor_id", params.value("outcome").toMap().value("debtor_id"));
-
-        if (!q.exec())
-            throw DatabaseException(DatabaseException::RRErrorCode::UndoAddDebtorFailure, q.lastError().text(),
-                                    "Failed to archive debtor.");
+        callProcedure("UndoArchiveDebtor", {
+                          ProcedureArgument {
+                              ProcedureArgument::Type::In,
+                              "debtor_id",
+                              params.value("outcome").toMap().value("debtor_id")
+                          },
+                          ProcedureArgument {
+                              ProcedureArgument::Type::In,
+                              "user_id",
+                              UserProfile::instance().userId()
+                          }
+                      });
 
         // Remove debt transaction
         for (const QVariant &debtTransactionId : debtTransactionIds) {
-            q.prepare("UPDATE debt_transaction SET archived = 1, last_edited = :last_edited, user_id = :user_id "
-                      "WHERE id = :debt_transaction_id");
-            q.bindValue(":last_edited", currentDateTime);
-            q.bindValue(":user_id", UserProfile::instance().userId());
-            q.bindValue(":debt_transaction_id", debtTransactionId);
+            callProcedure("UndoArchiveDebtTransaction", {
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "debt_transaction_id",
+                                  debtTransactionId
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "user_id",
+                                  UserProfile::instance().userId()
+                              }
+                          });
 
-            if (!q.exec())
-                throw DatabaseException(DatabaseException::RRErrorCode::UndoAddDebtorFailure, q.lastError().text(),
-                                        "Failed to archive debt transaction.");
+            // Remove debt payment for debt transaction ID
+            callProcedure("UndoArchiveDebtPayment", {
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "debt_transaction_id",
+                                  debtTransactionId
+                              },
+                              ProcedureArgument {
+                                  ProcedureArgument::Type::In,
+                                  "user_id",
+                                  UserProfile::instance().userId()
+                              }
+                          });
         }
 
-        // Remove debt payment for debt transaction ID
-        for (const QVariant &debtTransactionId : debtTransactionIds) {
-            q.prepare("UPDATE debt_payment SET archived = 1, last_edited = :last_edited, user_id = :user_id "
-                      "WHERE debt_transaction_id = :debt_transaction_id");
-            q.bindValue(":last_edited", currentDateTime);
-            q.bindValue(":user_id", UserProfile::instance().userId());
-            q.bindValue(":debt_transaction_id", debtTransactionId);
-
-            if (!q.exec())
-                throw DatabaseException(DatabaseException::RRErrorCode::UndoAddDebtorFailure, q.lastError().text(),
-                                        "Failed to archive debt payments.");
-        }
-
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
+        DatabaseUtils::commitTransaction(q);
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -358,13 +359,11 @@ void DebtorSqlManager::updateDebtor(const QueryRequest &request, QueryResult &re
     try {
         AbstractSqlManager::enforceArguments({ "client_id", "debtor_id", "preferred_name", "primary_phone_number" }, params);
 
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(),
-                                    QStringLiteral("Failed to start transation."));
+        DatabaseUtils::beginTransaction(q);
 
         // STEP: Check if debt transactions exist.
         if (updatedDebtTransactions.isEmpty() && newDebtTransactions.isEmpty())
-            throw DatabaseException(DatabaseException::RRErrorCode::MissingArguments, q.lastError().text(),
+            throw DatabaseException(DatabaseError::QueryErrorCode::MissingArguments, q.lastError().text(),
                                     QString("No new/updated debt transactions for debtor %1.").arg(params.value("preferred_name").toString()));
 
         // STEP: Update notes for debtor.
@@ -384,7 +383,7 @@ void DebtorSqlManager::updateDebtor(const QueryRequest &request, QueryResult &re
         }
 
         if (newDebtTransactions.count() != newDebtTransactionNoteIds.count())
-            throw DatabaseException(DatabaseException::RRErrorCode::UpdateDebtorFailure, "",
+            throw DatabaseException(DatabaseError::QueryErrorCode::UpdateDebtorFailure, "",
                                     QStringLiteral("Failed to match note ID count with transaction count."));
 
         // STEP: Update client details.
@@ -429,11 +428,11 @@ void DebtorSqlManager::updateDebtor(const QueryRequest &request, QueryResult &re
             double newDebt = totalDebt;
 
             if (debtTransactionId <= 0)
-                throw DatabaseException(DatabaseException::RRErrorCode::InvalidArguments, q.lastError().text(),
+                throw DatabaseException(DatabaseError::QueryErrorCode::InvalidArguments, q.lastError().text(),
                                         QStringLiteral("Debt transaction ID used to update table is invalid."));
 
             if (dueDateTime.isNull() || !dueDateTime.isValid() || dueDateTime <= QDateTime::currentDateTime())
-                throw DatabaseException(DatabaseException::RRErrorCode::InvalidDueDate, q.lastError().text(),
+                throw DatabaseException(DatabaseError::QueryErrorCode::InvalidDueDate, q.lastError().text(),
                                         QStringLiteral("Due date is earlier than the current date or invalid."));
 
             // Update timestamp for debt transactions.
@@ -457,7 +456,7 @@ void DebtorSqlManager::updateDebtor(const QueryRequest &request, QueryResult &re
                 const double amountPaid = updatedDebtPayments.at(j).toMap().value("amount_paid").toDouble();
 
                 if (debtPaymentId <= 0)
-                    throw DatabaseException(DatabaseException::RRErrorCode::InvalidArguments, q.lastError().text(),
+                    throw DatabaseException(DatabaseError::QueryErrorCode::InvalidArguments, q.lastError().text(),
                                             QStringLiteral("Debt payment ID used to update table is invalid."));
 
                 callProcedure("UpdateDebtPayment", {
@@ -500,7 +499,7 @@ void DebtorSqlManager::updateDebtor(const QueryRequest &request, QueryResult &re
 
                 newDebt -= amountPaid;
                 if (newDebt < 0.0)
-                    throw DatabaseException(DatabaseException::RRErrorCode::AmountOverpaid, q.lastError().text(),
+                    throw DatabaseException(DatabaseError::QueryErrorCode::AmountOverpaid, q.lastError().text(),
                                             QStringLiteral("Total amount paid is greater than total debt."));
             }
 
@@ -593,7 +592,7 @@ void DebtorSqlManager::updateDebtor(const QueryRequest &request, QueryResult &re
             double newDebt = totalDebt;
 
             if (dueDateTime.isNull() || !dueDateTime.isValid() || dueDateTime <= QDateTime::currentDateTime())
-                throw DatabaseException(DatabaseException::RRErrorCode::InvalidDueDate, q.lastError().text(),
+                throw DatabaseException(DatabaseError::QueryErrorCode::InvalidDueDate, q.lastError().text(),
                                         QStringLiteral("Due date is earlier than the current date or invalid."));
 
             newDebtTransactionIds.append(debtTransactionId);
@@ -650,7 +649,7 @@ void DebtorSqlManager::updateDebtor(const QueryRequest &request, QueryResult &re
 
                 newDebt -= amountPaid;
                 if (newDebt < 0.0)
-                    throw DatabaseException(DatabaseException::RRErrorCode::AmountOverpaid, q.lastError().text(),
+                    throw DatabaseException(DatabaseError::QueryErrorCode::AmountOverpaid, q.lastError().text(),
                                             QStringLiteral("Total amount paid is greater than total debt."));
             }
         }
@@ -687,19 +686,16 @@ void DebtorSqlManager::updateDebtor(const QueryRequest &request, QueryResult &re
                           });
         }
 
-        QVariantMap outcome;
-        outcome.insert("client_id", clientId);
-        outcome.insert("debtor_id", debtorId);
-        outcome.insert("updated_debt_transaction_ids", updatedDebtTransactionIds);
-        outcome.insert("new_debt_transaction_ids", newDebtTransactionIds);
-        result.setOutcome(outcome);
+        result.setOutcome(QVariantMap {
+                              { "client_id", clientId },
+                              { "debtor_id", debtorId },
+                              { "updated_debt_transaction_ids", updatedDebtTransactionIds },
+                              { "new_debt_transaction_ids", newDebtTransactionIds }
+                          });
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(),
-                                    QStringLiteral("Failed to commit."));
+        DatabaseUtils::commitTransaction(q);
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
+        DatabaseUtils::rollbackTransaction(q);
 
         throw;
     }
@@ -741,15 +737,13 @@ void DebtorSqlManager::viewDebtors(const QueryRequest &request, QueryResult &res
         }
 
         QVariantList debtors;
-        for (const QSqlRecord &record : records) {
-            qDebug() << "Debtor?" << record.value("debtor_id").toInt()
-                     << record.value("preferred_name").toString()
-                     << record.value("total_debt").toDouble()
-                     << record.value("archived").toBool();
+        for (const QSqlRecord &record : records)
             debtors.append(recordToMap(record));
-        }
 
-        result.setOutcome(QVariantMap { { "debtors", debtors }, { "record_count", debtors.count() } });
+        result.setOutcome(QVariantMap {
+                              { "debtors", debtors },
+                              { "record_count", debtors.count() }
+                          });
     } catch (DatabaseException &) {
         throw;
     }
@@ -766,11 +760,10 @@ void DebtorSqlManager::removeDebtor(const QueryRequest &request, QueryResult &re
         AbstractSqlManager::enforceArguments({ "debtor_id" }, params);
 
         if (params.value("debtor_id").toInt() <= 0)
-            throw DatabaseException(DatabaseException::RRErrorCode::InvalidArguments, QString(),
+            throw DatabaseException(DatabaseError::QueryErrorCode::InvalidArguments, QString(),
                                     QStringLiteral("Debtor ID is invalid."));
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(),
-                                    QStringLiteral("Failed to start transation."));
+
+        DatabaseUtils::beginTransaction(q);
 
         callProcedure("ArchiveDebtor", {
                           ProcedureArgument {
@@ -819,12 +812,9 @@ void DebtorSqlManager::removeDebtor(const QueryRequest &request, QueryResult &re
                                        { "debtor_row", params.value("debtor_row") }
                           });
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(), "Failed to commit.");
+        DatabaseUtils::commitTransaction(q);
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -841,10 +831,9 @@ void DebtorSqlManager::undoRemoveDebtor(const QueryRequest &request, QueryResult
         AbstractSqlManager::enforceArguments({ "debtor_id" }, params);
 
         if (params.value("debtor_id").toInt() <= 0)
-            throw DatabaseException(DatabaseException::RRErrorCode::InvalidArguments, QString(), "Debtor ID is invalid.");
+            throw DatabaseException(DatabaseError::QueryErrorCode::InvalidArguments, QString(), "Debtor ID is invalid.");
 
-        if (!DatabaseUtils::beginTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::BeginTransactionFailed, q.lastError().text(), "Failed to start transation.");
+        DatabaseUtils::beginTransaction(q);
 
         // Archive debt transactions.
         callProcedure("UndoArchiveDebtor", {
@@ -888,24 +877,21 @@ void DebtorSqlManager::undoRemoveDebtor(const QueryRequest &request, QueryResult
         QVariantMap debtor;
         if (!records.isEmpty()) {
             debtor = recordToMap(records.first());
-            result.setOutcome(QVariantMap { { "debtor", QVariant(debtor) },
-                                            { "record_count", 1 },
-                                            { "debtor_id", params.value("debtor_id") },
-                                            { "debtor_row", params.value("debtor_row") }
+            result.setOutcome(QVariantMap {
+                                  { "debtor", QVariant(debtor) },
+                                  { "record_count", 1 },
+                                  { "debtor_id", params.value("debtor_id") },
+                                  { "debtor_row", params.value("debtor_row") }
                               });
         } else {
-            throw DatabaseException(DatabaseException::RRErrorCode::UndoRemoveDebtorFailure,
+            throw DatabaseException(DatabaseError::QueryErrorCode::UndoRemoveDebtorFailure,
                                     q.lastError().text(),
-                                    QStringLiteral("Unable to fetch remove debtor."));
+                                    QStringLiteral("Unable to fetch removed debtor."));
         }
 
-        if (!DatabaseUtils::commitTransaction(q))
-            throw DatabaseException(DatabaseException::RRErrorCode::CommitTransationFailed, q.lastError().text(),
-                                    QStringLiteral("Failed to commit."));
+        DatabaseUtils::commitTransaction(q);
     } catch (DatabaseException &) {
-        if (!DatabaseUtils::rollbackTransaction(q))
-            qCritical("Failed to rollback failed transaction! %s", q.lastError().text().toStdString().c_str());
-
+        DatabaseUtils::rollbackTransaction(q);
         throw;
     }
 }
@@ -927,7 +913,7 @@ void DebtorSqlManager::viewDebtTransactions(const QueryRequest &request, QueryRe
         records = callProcedure("ViewFewDebtorDetails", {
                                     ProcedureArgument {
                                         ProcedureArgument::Type::In,
-                                        "debt_transaction_id",
+                                        "debtor_id",
                                         params.value("debtor_id")
                                     },
                                     ProcedureArgument {
@@ -1002,18 +988,20 @@ void DebtorSqlManager::viewDebtTransactions(const QueryRequest &request, QueryRe
         }
 
         if (transactions.count() != paymentGroups.count())
-            throw DatabaseException(DatabaseException::RRErrorCode::ResultMismatch,
+            throw DatabaseException(DatabaseError::QueryErrorCode::ResultMismatch,
                                     QString("Transaction count (%1) and payment group count (%2) are unequal.")
                                     .arg(transactions.count()).arg(paymentGroups.count()));
 
-        result.setOutcome(QVariantMap { { "client_id", clientId },
-                                        { "debtor_id", params.value("debtor_id") },
-                                        { "preferred_name", preferredName },
-                                        { "primary_phone_number", primaryPhoneNumber },
-                                        { "note", debtorNote },
-                                        { "transactions", transactions },
-                                        { "payment_groups", paymentGroups },
-                                        { "record_count", transactions.count() } });
+        result.setOutcome(QVariantMap {
+                              { "client_id", clientId },
+                              { "debtor_id", params.value("debtor_id") },
+                              { "preferred_name", preferredName },
+                              { "primary_phone_number", primaryPhoneNumber },
+                              { "note", debtorNote },
+                              { "transactions", transactions },
+                              { "payment_groups", paymentGroups },
+                              { "record_count", transactions.count() }
+                          });
     } catch (DatabaseException &) {
         throw;
     }
@@ -1030,23 +1018,28 @@ void DebtorSqlManager::viewDebtorDetails(const QueryRequest &request, QueryResul
 
         // STEP: Get total balance for each debtor
         const auto records = callProcedure("ViewDebtorDetails", {
-                                    ProcedureArgument {
-                                        ProcedureArgument::Type::In,
-                                        "debtor_id",
-                                        params.value("debtor_id")
-                                    },
-                                    ProcedureArgument {
-                                        ProcedureArgument::Type::In,
-                                        "archived",
-                                        params.value("archived", false)
-                                    }
-                                });
+                                               ProcedureArgument {
+                                                   ProcedureArgument::Type::In,
+                                                   "debtor_id",
+                                                   params.value("debtor_id")
+                                               },
+                                               ProcedureArgument {
+                                                   ProcedureArgument::Type::In,
+                                                   "archived",
+                                                   params.value("archived", false)
+                                               }
+                                           });
 
-        QVariantMap debtorInfo;
-        if (!records.isEmpty()) {
-            debtorInfo = recordToMap(records.first());
-            result.setOutcome(QVariantMap { { "debtor", debtorInfo }, { "record_count", 1 } });
-        }
+        if (records.isEmpty())
+            throw DatabaseException(DatabaseError::QueryErrorCode::InvalidArguments,
+                                    QString(),
+                                    QStringLiteral("Debtor with ID %1 does not exist.")
+                                    .arg(params.value("debtor_id").toInt()));
+
+        result.setOutcome(QVariantMap {
+                              { "debtor", recordToMap(records.first()) },
+                              { "record_count", 1 }
+                          });
     } catch (DatabaseException &) {
         throw;
     }

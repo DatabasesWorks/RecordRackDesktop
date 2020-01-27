@@ -1,22 +1,15 @@
 #include "qmlstockitemdetailrecord.h"
+#include "database/databasethread.h"
+#include "queryexecutors/stock.h"
+
 #include <QDateTime>
 
 QMLStockItemDetailRecord::QMLStockItemDetailRecord(QObject *parent) :
-    AbstractDetailRecord(parent),
-    m_itemId(-1),
-    m_categoryId(-1),
-    m_divisible(false),
-    m_quantity(0.0),
-    m_unitId(-1),
-    m_costPrice(0.0),
-    m_retailPrice(0.0),
-    m_userId(-1)
-{
-    connect(this, &QMLStockItemDetailRecord::itemIdChanged, this, &QMLStockItemDetailRecord::tryQuery);
-}
+    QMLStockItemDetailRecord(DatabaseThread::instance(), parent)
+{}
 
-QMLStockItemDetailRecord::QMLStockItemDetailRecord(DatabaseThread &thread) :
-    AbstractDetailRecord(thread),
+QMLStockItemDetailRecord::QMLStockItemDetailRecord(DatabaseThread &thread, QObject *parent) :
+    AbstractDetailRecord(thread, parent),
     m_itemId(-1),
     m_categoryId(-1),
     m_divisible(false),
@@ -68,9 +61,9 @@ bool QMLStockItemDetailRecord::isDivisible() const
     return m_divisible;
 }
 
-QString QMLStockItemDetailRecord::imageSource() const
+QUrl QMLStockItemDetailRecord::imageUrl() const
 {
-    return m_imageSource;
+    return m_imageUrl;
 }
 
 double QMLStockItemDetailRecord::quantity() const
@@ -129,9 +122,7 @@ void QMLStockItemDetailRecord::tryQuery()
         return;
 
     setBusy(true);
-    QueryRequest request(this);
-    request.setCommand("view_stock_item_details", { { "item_id", m_itemId } }, QueryRequest::Stock);
-    emit executeRequest(request);
+    emit execute(new StockQuery::ViewStockItemDetails(m_itemId, this));
 }
 
 void QMLStockItemDetailRecord::processResult(const QueryResult result)
@@ -148,7 +139,7 @@ void QMLStockItemDetailRecord::processResult(const QueryResult result)
         setItem(record.value("item").toString());
         setDescription(record.value("description").toString());
         setDivisible(record.value("divisible").toBool());
-        setImageSource(record.value("image_source").toString());
+        setImageUrl(record.value("image_url").toString());
         setQuantity(record.value("quantity").toDouble());
         setUnitId(record.value("unit_id").toInt());
         setUnit(record.value("unit").toString());
@@ -210,13 +201,13 @@ void QMLStockItemDetailRecord::setDivisible(bool divisible)
     emit divisibleChanged();
 }
 
-void QMLStockItemDetailRecord::setImageSource(const QString &imageSource)
+void QMLStockItemDetailRecord::setImageUrl(const QUrl &imageUrl)
 {
-    if (m_imageSource == imageSource)
+    if (m_imageUrl == imageUrl)
         return;
 
-    m_imageSource = imageSource;
-    emit imageSourceChanged();
+    m_imageUrl = imageUrl;
+    emit imageUrlChanged();
 }
 
 void QMLStockItemDetailRecord::setQuantity(double quantity)

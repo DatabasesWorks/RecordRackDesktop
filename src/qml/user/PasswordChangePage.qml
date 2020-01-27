@@ -102,8 +102,7 @@ RRUi.Page {
                     }
                 }
 
-                QQC2.Button {
-                    Material.background: Material.accent
+                RRUi.PrimaryButton {
                     anchors {
                         bottom: parent.bottom
                         margins: 24

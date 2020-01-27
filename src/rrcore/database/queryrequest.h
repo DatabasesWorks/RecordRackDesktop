@@ -9,7 +9,7 @@ class QueryRequest : public QObject
 {
     Q_OBJECT
 public:
-    enum Type {
+    enum class QueryGroup {
         Unknown,
         Client,
         User,
@@ -20,28 +20,48 @@ public:
         Income,
         Expense,
         Debtor
-    }; Q_ENUM(Type)
+    }; Q_ENUM(QueryGroup)
+
+    enum class CommandVerb {
+        Create,
+        Read,
+        Update,
+        Delete,
+        Authenticate
+    }; Q_ENUM(CommandVerb)
+
     explicit QueryRequest(QObject *receiver = nullptr); // NOTE: The parent parameter is mandatory!
     QueryRequest(const QueryRequest &other);
     QueryRequest &operator= (const QueryRequest &other);
 
     inline bool operator ==(const QueryRequest &other) const {
-        return m_command == other.command() && m_type == other.type() && parent() == other.parent();
+        return m_command == other.command() && m_queryGroup == other.queryGroup();
     }
+
+    bool canUndo() const;
+    bool isUndoSet() const;
 
     QObject *receiver() const;
     void setReceiver(QObject *receiver);
 
-    void setCommand(const QString &command, const QVariantMap &params, const Type type);
+    void setCommand(const QString &command, const QVariantMap &params, const QueryGroup queryGroup);
     QString command() const;
+
+    void setParams(const QVariantMap &params);
+
     QVariantMap params() const;
-    Type type() const;
+    QueryGroup queryGroup() const;
+    CommandVerb commandVerb() const;
+    QByteArray toJson() const;
+
+    static QueryRequest fromJson(const QByteArray &json);
 
     friend QDebug operator<<(QDebug debug, const QueryRequest &request)
     {
         debug.nospace() << "QueryRequest(command=" << request.command()
                         << ", params=" << request.params()
-                        << ", type=" << request.type() << ") ";
+                        << ", queryGroup=" << request.queryGroup()
+                        << ")";
 
         return debug;
     }
@@ -49,7 +69,10 @@ private:
     QObject *m_receiver;
     QString m_command;
     QVariantMap m_params;
-    Type m_type;
+    QueryGroup m_queryGroup;
+
+    static QueryGroup queryGroupToEnum(const QString &queryGroupString);
+    static QString queryGroupToString(QueryGroup queryGroupEnum);
 };
 
 #endif // QUERYREQUEST_H

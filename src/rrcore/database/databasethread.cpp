@@ -3,105 +3,79 @@
 #include <QElapsedTimer>
 #include <QDebug>
 #include <QLoggingCategory>
+#include <QSettings>
 
 #include "databaseexception.h"
 #include "queryrequest.h"
 #include "queryresult.h"
-#include "sqlmanager/usersqlmanager.h"
-#include "sqlmanager/dashboardsqlmanager.h"
-#include "sqlmanager/stocksqlmanager.h"
-#include "sqlmanager/salesqlmanager.h"
-#include "sqlmanager/debtorsqlmanager.h"
-#include "sqlmanager/clientsqlmanager.h"
-#include "sqlmanager/purchasesqlmanager.h"
-#include "sqlmanager/incomesqlmanager.h"
-#include "sqlmanager/expensesqlmanager.h"
-
-const QString CONNECTION_NAME(QStringLiteral("db_thread"));
+#include "network/networkthread.h"
+#include "user/userprofile.h"
+#include "queryexecutors/user/userexecutor.h"
 
 Q_LOGGING_CATEGORY(databaseThread, "rrcore.database.databasethread");
 
-Worker::Worker(QObject *parent) :
+const QString CONNECTION_NAME(QStringLiteral("db_thread"));
+
+DatabaseWorker::DatabaseWorker(QObject *parent) :
     QObject(parent)
 {
 }
 
-Worker::~Worker()
+DatabaseWorker::~DatabaseWorker()
 {
     QSqlDatabase connection = QSqlDatabase::database(CONNECTION_NAME);
     connection.close();
 }
 
-void Worker::execute(const QueryRequest request)
+void DatabaseWorker::execute(QueryExecutor *queryExecutor)
 {
-    qCInfo(databaseThread) << "Worker->" << request << ", receiver=" << request.receiver();
-    QueryResult result;
+    qCInfo(databaseThread) << queryExecutor->request();
+    const QueryRequest &request(queryExecutor->request());
+    QueryResult result{ request };
 
     QElapsedTimer timer;
     timer.start();
 
     try {
         if (request.command().trimmed().isEmpty())
-            throw DatabaseException(DatabaseException::RRErrorCode::NoCommand, "No command set.");
+            throw DatabaseException(DatabaseError::QueryErrorCode::NoCommand);
 
-        switch (request.type()) {
-        case QueryRequest::User:
-            result = UserSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        case QueryRequest::Client:
-            result = ClientSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        case QueryRequest::Dashboard:
-            result = DashboardSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        case QueryRequest::Stock:
-            result = StockSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        case QueryRequest::Sales:
-            result = SaleSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        case QueryRequest::Purchase:
-            result = PurchaseSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        case QueryRequest::Income:
-            result = IncomeSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        case QueryRequest::Expense:
-            result = ExpenseSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        case QueryRequest::Debtor:
-            result = DebtorSqlManager(CONNECTION_NAME).execute(request);
-            break;
-        default:
-            throw DatabaseException(DatabaseException::RRErrorCode::RequestTypeNotFound, "Unhandled request type.");
-        }
-
-        if (!result.isSuccessful())
-            throw DatabaseException(result.errorCode(), result.errorMessage(), result.errorUserMessage());
+        queryExecutor->setConnectionName(CONNECTION_NAME);
+        result = queryExecutor->execute();
     } catch (DatabaseException &e) {
         result.setSuccessful(false);
         result.setErrorCode(e.code());
         result.setErrorMessage(e.message());
         result.setErrorUserMessage(e.userMessage());
-        qCCritical(databaseThread) << "DatabaseException in Worker->" << e.code() << e.message() << e.userMessage();
+        qCCritical(databaseThread) << e;
     }
 
+    queryExecutor->deleteLater();
     emit resultReady(result);
-    qInfo() << "Worker->" << result << " [elapsed = " << timer.elapsed() << " ms]";
+    qCInfo(databaseThread) << result << " [elapsed = " << timer.elapsed() << " ms]";
 }
 
 DatabaseThread::DatabaseThread(QObject *parent) :
     QThread(parent)
 {
     if (!isRunning()) {
-        Worker *worker = new Worker;
+        if (UserProfile::instance().isServerTunnelingEnabled()) {
+            connect(this, &DatabaseThread::execute,
+                    &NetworkThread::instance(), &NetworkThread::tunnelToServer);
+            connect(&NetworkThread::instance(), &NetworkThread::resultReady,
+                    this, &DatabaseThread::resultReady);
+        } else {
+            DatabaseWorker *worker = new DatabaseWorker;
 
-        connect(worker, &Worker::resultReady, this, &DatabaseThread::resultReady);
-        connect(this, &DatabaseThread::execute, worker, &Worker::execute);
-        connect(this, &DatabaseThread::finished, worker, &Worker::deleteLater);
+            connect(worker, &DatabaseWorker::resultReady, this, &DatabaseThread::resultReady);
+            connect(this, &DatabaseThread::execute, worker, &DatabaseWorker::execute);
+            connect(this, &DatabaseThread::finished, worker, &DatabaseWorker::deleteLater);
+            connect(this, &DatabaseThread::resultReady,
+                    &NetworkThread::instance(), &NetworkThread::syncWithServer);
 
-        worker->moveToThread(this);
-        start();
+            worker->moveToThread(this);
+            start();
+        }
     }
 }
 
@@ -119,7 +93,8 @@ DatabaseThread::~DatabaseThread()
 DatabaseThread &DatabaseThread::instance()
 {
     static DatabaseThread instance;
-    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, &instance, &DatabaseThread::quit);
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
+            &instance, &DatabaseThread::quit);
     return instance;
 }
 

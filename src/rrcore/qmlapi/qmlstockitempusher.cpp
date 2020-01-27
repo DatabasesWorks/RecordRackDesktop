@@ -1,43 +1,30 @@
 #include "qmlstockitempusher.h"
 #include "database/databasethread.h"
-#include "database/databaseexception.h"
+#include "database/databaseerror.h"
+#include "queryexecutors/stock.h"
+
+#include <QUrl>
 
 QMLStockItemPusher::QMLStockItemPusher(QObject *parent) :
-    AbstractPusher(parent),
+    QMLStockItemPusher(DatabaseThread::instance(), parent)
+{}
+
+QMLStockItemPusher::QMLStockItemPusher(DatabaseThread &thread, QObject *parent) :
+    AbstractPusher(thread, parent),
     m_itemId(-1),
-    m_imageSource(QString()),
-    m_category(QString()),
-    m_item(QString()),
-    m_description(QString()),
     m_quantity(0.0),
-    m_unit(QString()),
-    m_categoryNote(QString()),
-    m_itemNote(QString()),
     m_tracked(false),
     m_divisible(false),
     m_costPrice(0.0),
-    m_retailPrice(0.0)
+    m_retailPrice(0.0),
+    m_baseUnitEquivalent(1.0)
 {
 
 }
 
-QMLStockItemPusher::QMLStockItemPusher(DatabaseThread &thread) :
-    AbstractPusher(thread),
-    m_itemId(-1),
-    m_imageSource(QString()),
-    m_category(QString()),
-    m_item(QString()),
-    m_description(QString()),
-    m_quantity(0.0),
-    m_unit(QString()),
-    m_categoryNote(QString()),
-    m_itemNote(QString()),
-    m_tracked(false),
-    m_divisible(false),
-    m_costPrice(0.0),
-    m_retailPrice(0.0)
+bool QMLStockItemPusher::isExistingItem() const
 {
-
+    return m_itemId > 0;
 }
 
 int QMLStockItemPusher::itemId() const
@@ -226,31 +213,42 @@ void QMLStockItemPusher::push()
 {
     setBusy(true);
 
-    QVariantMap params;
-    // Don't pass quantity if you are updating the stock item.
-    if (m_itemId > 0)
-        params.insert("item_id", m_itemId);
+    if (isExistingItem())
+        emit execute(new StockQuery::UpdateStockItem(
+                         m_itemId,
+                         m_category,
+                         m_item,
+                         m_description,
+                         m_unit,
+                         m_tracked,
+                         m_divisible,
+                         m_costPrice,
+                         m_retailPrice,
+                         m_baseUnitEquivalent,
+                         true,
+                         QStringLiteral("NGN"),
+                         QUrl(),
+                         QString(),
+                         QString(),
+                         this));
     else
-        params.insert("quantity", m_quantity);
-
-    params.insert("image_source", m_imageSource);
-    params.insert("category", m_category);
-    params.insert("item", m_item);
-    params.insert("description", m_description);
-    params.insert("unit", m_unit);
-    params.insert("category_note", m_categoryNote);
-    params.insert("item_note", m_itemNote);
-    params.insert("tracked", m_tracked);
-    params.insert("divisible", m_divisible);
-    params.insert("cost_price", m_costPrice);
-    params.insert("retail_price", m_retailPrice);
-
-    QueryRequest request(this);
-    if (m_itemId > 0)
-        request.setCommand("update_stock_item", params, QueryRequest::Stock);
-    else
-        request.setCommand("add_new_stock_item", params, QueryRequest::Stock);
-    emit executeRequest(request);
+        emit execute(new StockQuery::AddStockItem(
+                         m_category,
+                         m_item,
+                         m_description,
+                         m_quantity,
+                         m_unit,
+                         m_tracked,
+                         m_divisible,
+                         m_costPrice,
+                         m_retailPrice,
+                         m_baseUnitEquivalent,
+                         true,
+                         QStringLiteral("NGN"),
+                         QUrl(),
+                         QString(),
+                         QString(),
+                         this));
 }
 
 void QMLStockItemPusher::processResult(const QueryResult result)
@@ -261,16 +259,16 @@ void QMLStockItemPusher::processResult(const QueryResult result)
     setBusy(false);
 
     if (result.isSuccessful()) {
-        if (result.request().command() == "add_new_stock_item")
+        if (result.request().command() == StockQuery::AddStockItem::COMMAND)
             emit success(AddItemSuccess);
-        else if (result.request().command() == "update_stock_item")
+        else if (result.request().command() == StockQuery::UpdateStockItem::COMMAND)
             emit success(UpdateItemSuccess);
     } else {
         switch (result.errorCode()) {
-        case static_cast<int>(DatabaseException::MySqlErrorCode::UserDefinedException):
+        case static_cast<int>(DatabaseError::MySqlErrorCode::UserDefinedException):
             emit error(DuplicateEntryError);
             break;
-        case static_cast<int>(DatabaseException::RRErrorCode::ImageTooLarge):
+        case static_cast<int>(DatabaseError::QueryErrorCode::ImageTooLarge):
             emit error(ImageTooLargeError);
             break;
         default:

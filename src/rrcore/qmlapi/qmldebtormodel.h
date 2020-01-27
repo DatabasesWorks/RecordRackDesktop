@@ -24,7 +24,7 @@ public:
     enum Roles {
         ClientIdRole = Qt::UserRole,
         DebtorIdRole,
-        ImageSourceRole,
+        ImageUrlRole,
         PreferredNameRole,
         TotalDebtRole,
         NoteRole,
@@ -38,7 +38,7 @@ public:
     }; Q_ENUM(FilterColumn)
 
     explicit QMLDebtorModel(QObject *parent = nullptr);
-    explicit QMLDebtorModel(DatabaseThread &thread);
+    explicit QMLDebtorModel(DatabaseThread &thread, QObject *parent = nullptr);
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override final;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override final;
@@ -53,6 +53,7 @@ private:
     QVariantList m_records;
 
     int debtorRowFromId(int debtorId);
+    QString filterColumnName() const;
 
     void removeItemFromModel(int debtorId);
     void undoRemoveItemFromModel(int row, int debtorId, const QVariantMap &debtorInfo);

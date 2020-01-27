@@ -3,6 +3,8 @@
 
 #include <QObject>
 #include <QUrl>
+#include <QLoggingCategory>
+#include "network/serverresponse.h"
 
 class QQmlEngine;
 class QJSEngine;
@@ -44,10 +46,15 @@ private:
     void displayNotificationOnLinux(Category category, const QString &title, const QString &message,
                                     Urgency urgency = Urgency::NormalPriority, Duration duration = Duration::Short,
                                     const QUrl &iconUrl = QUrl(), const QString &appName = QString());
+
+    void displayServerStatus(const ServerResponse response);
 };
 
 static QObject *notifier_provider (QQmlEngine *, QJSEngine *) {
     QMLNotifier *notifier = new QMLNotifier();
     return notifier;
 }
+
+Q_DECLARE_LOGGING_CATEGORY(qmlNotifier);
+
 #endif // QMLNOTIFIER_H

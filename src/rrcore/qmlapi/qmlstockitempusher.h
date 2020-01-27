@@ -25,7 +25,7 @@ class QMLStockItemPusher : public AbstractPusher
     Q_PROPERTY(double retailPrice READ retailPrice WRITE setRetailPrice NOTIFY retailPriceChanged)
 public:
     explicit QMLStockItemPusher(QObject *parent = nullptr);
-    explicit QMLStockItemPusher(DatabaseThread &thread); // For testing
+    explicit QMLStockItemPusher(DatabaseThread &thread, QObject *parent = nullptr); // For testing
 
     enum SuccessCode {
         UnknownSuccess,
@@ -38,6 +38,8 @@ public:
         DuplicateEntryError,
         ImageTooLargeError
     }; Q_ENUM(ErrorCode)
+
+    bool isExistingItem() const;
 
     int itemId() const;
     void setItemId(int itemId);
@@ -110,6 +112,7 @@ private:
     bool m_divisible;
     double m_costPrice;
     double m_retailPrice;
+    double m_baseUnitEquivalent;
 };
 
 #endif // QMLSTOCKITEMPUSHER_H

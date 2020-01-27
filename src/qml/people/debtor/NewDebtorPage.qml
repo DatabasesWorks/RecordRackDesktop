@@ -8,7 +8,7 @@ import com.gecko.rr.models 1.0 as RRModels
 import com.gecko.rr.components 1.0 as RRComponents
 import "../../rrui" as RRUi
 import "../../common"
-import "newdebttransactionwizard"
+import "../../wizard"
 
 RRUi.Page {
     id: newDebtorPage
@@ -33,7 +33,7 @@ RRUi.Page {
             }
             width: 800
 
-            transitionComponent: RRUi.Card {
+            component: RRUi.Card {
                 id: transitionItem
                 padding: 0
                 bottomPadding: 0
